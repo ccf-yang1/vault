@@ -25,6 +25,8 @@ class _ConnectPageState extends ConsumerState<ConnectPage> {
   bool _busy = false;
   bool _obscure = true;
   String? _error;
+  ConnectAttempt? _attempt;
+  bool _showLog = false;
 
   @override
   void initState() {
@@ -43,6 +45,16 @@ class _ConnectPageState extends ConsumerState<ConnectPage> {
       if (_user.text.isEmpty) _user.text = saved.username;
       if (_pass.text.isEmpty) _pass.text = saved.password;
     });
+    // 自动登录失败是不弹错的（免得开屏就跳告警），但过程得留在这里，
+    // 否则用户只会看到一张空表单，完全不知道刚才发生了什么。
+    final attempt = ref.read(sessionProvider.notifier).lastAttempt;
+    if (attempt != null && !attempt.ok && mounted) {
+      setState(() {
+        _attempt = attempt;
+        _error = attempt.error!.message;
+        _showLog = true;
+      });
+    }
   }
 
   @override
@@ -57,6 +69,7 @@ class _ConnectPageState extends ConsumerState<ConnectPage> {
     setState(() {
       _busy = true;
       _error = null;
+      _attempt = null;
     });
     final config = ConnectionConfig(
       type: _type,
@@ -87,6 +100,8 @@ class _ConnectPageState extends ConsumerState<ConnectPage> {
     setState(() {
       _busy = false;
       _error = result.message;
+      _attempt = result.attempt;
+      _showLog = true;
     });
   }
 
@@ -209,6 +224,7 @@ class _ConnectPageState extends ConsumerState<ConnectPage> {
                   ),
                 ),
               ],
+              _diagnostics(),
               const SizedBox(height: 15),
               const Row(
                 mainAxisAlignment: MainAxisAlignment.center,
@@ -265,6 +281,53 @@ class _ConnectPageState extends ConsumerState<ConnectPage> {
             ),
         ],
       ),
+    );
+  }
+
+  /// 失败时把这次请求的完整过程摊开：光一句「无法连接服务器」没法定位，
+  /// 得让人看见真正发出去的 URL、HTTP 状态码和系统回的原话。
+  Widget _diagnostics() {
+    final attempt = _attempt;
+    if (attempt == null) return const SizedBox.shrink();
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        const SizedBox(height: 10),
+        GestureDetector(
+          behavior: HitTestBehavior.opaque,
+          onTap: () => setState(() => _showLog = !_showLog),
+          child: const Padding(
+            padding: EdgeInsets.symmetric(vertical: 6),
+            child: Row(
+              children: [
+                VIcon('list', size: 13, color: VaultColors.dim),
+                SizedBox(width: 7),
+                Text('登录日志', style: TextStyle(fontSize: 12, color: VaultColors.muted)),
+                Spacer(),
+                Text('展开 / 收起', style: TextStyle(fontSize: 11, color: VaultColors.dim)),
+              ],
+            ),
+          ),
+        ),
+        if (_showLog)
+          Container(
+            padding: const EdgeInsets.all(11),
+            decoration: BoxDecoration(
+              color: const Color(0xFF131518),
+              borderRadius: BorderRadius.circular(11),
+              border: Border.all(color: VaultColors.line),
+            ),
+            child: SelectableText(
+              attempt.render(),
+              style: const TextStyle(
+                fontSize: 11,
+                height: 1.65,
+                fontFamily: 'Menlo',
+                color: VaultColors.muted,
+              ),
+            ),
+          ),
+      ],
     );
   }
 

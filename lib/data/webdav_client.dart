@@ -23,6 +23,7 @@ enum WebDavErrorKind {
   tooManyAttempts,
   schemeMismatch,
   writeDisabled,
+  localNetworkBlocked,
   server,
   network,
 }
@@ -52,11 +53,13 @@ class WebDavError implements Exception {
         WebDavErrorKind.schemeMismatch => '这个端口像是明文 HTTP 服务，请把地址改成 http:// 开头',
         // OpenList / Alist 把 WebDAV 的读和写分成两档权限，新建用户默认只给读（server/webdav.go）。
         WebDavErrorKind.writeDisabled => '这个账号只能看不能传，请在 OpenList 后台的用户权限里勾上 WebDAV 写入',
+        // iOS 从 14 起在系统层拦掉没有「本地网络」权限的局域网直连，报出来只是普通 socket 失败。
+        WebDavErrorKind.localNetworkBlocked => 'iPhone 不允许这个 App 访问局域网。请到 设置 → 隐私与安全性 → 本地网络 里打开 Vault，然后彻底关掉 App 再试一次',
         WebDavErrorKind.server => '服务器错误${statusCode == null ? '' : ' ($statusCode)'}',
         WebDavErrorKind.network => '无法连接服务器${statusCode == null ? '' : ' (HTTP $statusCode)'}',
       };
 
-  static WebDavError from(DioException e) {
+  static WebDavError from(DioException e, {bool lanTarget = false}) {
     if (e.type == DioExceptionType.cancel) return WebDavError(WebDavErrorKind.canceled);
     if (e.type == DioExceptionType.connectionTimeout ||
         e.type == DioExceptionType.sendTimeout ||
@@ -70,7 +73,17 @@ class WebDavError implements Exception {
       return WebDavError(isCert ? WebDavErrorKind.tls : WebDavErrorKind.schemeMismatch, detail: text);
     }
     if (e.error is SocketException) {
-      return WebDavError(WebDavErrorKind.network, detail: e.error.toString());
+      final text = e.error.toString();
+      // 「本地网络」权限被拒时 iOS 不会给任何权限错误，只让 connect() 以
+      // Network is down / No route to host / Operation not permitted 失败。
+      final denied = lanTarget &&
+          (text.contains('Network is down') ||
+              text.contains('No route to host') ||
+              text.contains('Operation not permitted'));
+      return WebDavError(
+        denied ? WebDavErrorKind.localNetworkBlocked : WebDavErrorKind.network,
+        detail: text,
+      );
     }
     final code = e.response?.statusCode;
     if (code != null) return fromStatus(code, body: e.response?.data);
@@ -157,9 +170,13 @@ class WebDavClient {
         host.endsWith('.local');
   }
 
+  /// 目标是不是局域网地址：决定 socket 失败要不要报成「本地网络权限被拒」。
+  bool get targetsLocalNetwork => _looksLikeLan(config.baseUrl);
+
+  WebDavError _err(DioException e) => WebDavError.from(e, lanTarget: targetsLocalNetwork);
+
   String get authHeader =>
       'Basic ${base64Encode(latin1.encode('${config.username}:${config.password}'))}';
-
   /// 服务器前缀（例如 `/dav`），PROPFIND 的 href 需要把它剥掉。
   String get hostBasePath {
     final segs = _base.pathSegments.where((s) => s.isNotEmpty);
@@ -231,7 +248,7 @@ class WebDavClient {
         ),
       );
     } on DioException catch (e) {
-      throw WebDavError.from(e);
+      throw _err(e);
     }
     final status = res.statusCode ?? 0;
     if (status != 207 && status != 200) {
@@ -399,7 +416,7 @@ class WebDavClient {
     } on DioException catch (e) {
       final code = e.response?.statusCode;
       if (code == 404 || code == 405 || code == 400 || code == 403) return false;
-      throw WebDavError.from(e);
+      throw _err(e);
     }
   }
 
@@ -418,7 +435,7 @@ class WebDavClient {
       if (code == 201 || code == 204 || code == 200 || code == 405) return;
       throw WebDavError.forWrite(WebDavError.fromStatus(code, body: res.data));
     } on DioException catch (e) {
-      throw WebDavError.forWrite(WebDavError.from(e));
+      throw WebDavError.forWrite(_err(e));
     }
   }
 
@@ -444,7 +461,7 @@ class WebDavClient {
       }
       throw WebDavError.fromStatus(code);
     } on DioException catch (e) {
-      throw WebDavError.from(e);
+      throw _err(e);
     }
   }
 
@@ -463,7 +480,7 @@ class WebDavClient {
         onReceiveProgress: onProgress,
       );
     } on DioException catch (e) {
-      throw WebDavError.from(e);
+      throw _err(e);
     }
   }
 
@@ -490,7 +507,7 @@ class WebDavClient {
         ),
       );
     } on DioException catch (e) {
-      throw WebDavError.forWrite(WebDavError.from(e));
+      throw WebDavError.forWrite(_err(e));
     }
   }
 

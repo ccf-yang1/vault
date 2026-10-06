@@ -101,6 +101,10 @@ jobs:
 
       # 需求 §3.3：缓存只留 App 沙盒，不进系统相册、也不通过「文件」App 暴露，
       # 所以只申请相册「读取」权限，且显式关掉文件共享。
+      #
+      # NSLocalNetworkUsageDescription 是必需的：iOS 14 起，没有这个键就连不上
+      # 局域网里的服务器（192.168.x.x 这类），系统不弹任何提示，socket 直接以
+      # "Network is down" 失败 —— 表现和「无法连接服务器 / 密码错」一模一样。
       - name: Patch Info.plist
         run: |
           PLIST=ios/Runner/Info.plist
@@ -110,11 +114,14 @@ jobs:
           /usr/libexec/PlistBuddy -c "Set :CFBundleDisplayName Vault" "$PLIST" 2>/dev/null || true
           /usr/libexec/PlistBuddy -c "Add :NSPhotoLibraryUsageDescription string 用于把相册照片上传到你的 WebDAV，App 不会写入系统相册。" "$PLIST" 2>/dev/null || true
           /usr/libexec/PlistBuddy -c "Set :NSPhotoLibraryUsageDescription 用于把相册照片上传到你的 WebDAV，App 不会写入系统相册。" "$PLIST" 2>/dev/null || true
+          /usr/libexec/PlistBuddy -c "Add :NSLocalNetworkUsageDescription string Vault 需要访问局域网来连接你自己的 WebDAV / OpenList 服务器。" "$PLIST" 2>/dev/null || true
+          /usr/libexec/PlistBuddy -c "Set :NSLocalNetworkUsageDescription Vault 需要访问局域网来连接你自己的 WebDAV / OpenList 服务器。" "$PLIST" 2>/dev/null || true
           /usr/libexec/PlistBuddy -c "Add :UIFileSharingEnabled bool false" "$PLIST" 2>/dev/null || true
           /usr/libexec/PlistBuddy -c "Set :UIFileSharingEnabled false" "$PLIST" 2>/dev/null || true
           /usr/libexec/PlistBuddy -c "Add :LSSupportsOpeningDocumentsInPlace bool false" "$PLIST" 2>/dev/null || true
           /usr/libexec/PlistBuddy -c "Set :LSSupportsOpeningDocumentsInPlace false" "$PLIST" 2>/dev/null || true
           /usr/libexec/PlistBuddy -c "Print :NSPhotoLibraryUsageDescription" "$PLIST"
+          /usr/libexec/PlistBuddy -c "Print :NSLocalNetworkUsageDescription" "$PLIST"
           /usr/libexec/PlistBuddy -c "Delete :NSPhotoLibraryAddUsageDescription" "$PLIST" 2>/dev/null || true
           /usr/libexec/PlistBuddy -c "Print :NSAppTransportSecurity" "$PLIST" || true
 

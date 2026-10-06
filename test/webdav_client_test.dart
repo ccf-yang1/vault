@@ -2,9 +2,11 @@ import 'dart:convert';
 import 'dart:io';
 import 'dart:typed_data';
 
+import 'package:dio/dio.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:vault/core/models.dart';
 import 'package:vault/data/webdav_client.dart';
+import 'package:vault/state/session_providers.dart';
 
 import 'mock_webdav.dart';
 
@@ -274,5 +276,64 @@ void main() {
         reason: bad,
       );
     }
+  });
+
+  test('连局域网失败时报「本地网络权限」，连公网同样失败时不报', () {
+    DioException socketFailure(String osError) => DioException(
+          requestOptions: RequestOptions(path: 'http://192.0.2.1:5244/dav'),
+          error: SocketException(osError),
+        );
+
+    final lan = WebDavError.from(
+      socketFailure('OS Error: Network is down, errno = 50'),
+      lanTarget: true,
+    );
+    expect(lan.kind, WebDavErrorKind.localNetworkBlocked);
+    expect(lan.message, contains('本地网络'));
+
+    // 同一个错发生在公网域名上就跟本地网络权限无关，别把人往设置页支走。
+    expect(
+      WebDavError.from(socketFailure('OS Error: Network is down, errno = 50'), lanTarget: false).kind,
+      WebDavErrorKind.network,
+    );
+    // 服务器明确回了 RST（连接被拒）也不该报权限。
+    expect(
+      WebDavError.from(socketFailure('OS Error: Connection refused, errno = 61'), lanTarget: true).kind,
+      WebDavErrorKind.network,
+    );
+  });
+
+  test('targetsLocalNetwork 只对局域网地址为真', () {
+    WebDavClient forUrl(String url) => WebDavClient(ConnectionConfig(
+          type: StorageType.webdav,
+          baseUrl: url,
+          username: 'u',
+          password: 'p',
+        ));
+    expect(forUrl('http://192.168.1.17:5244/dav').targetsLocalNetwork, isTrue);
+    expect(forUrl('https://dav.example.com/dav').targetsLocalNetwork, isFalse);
+  });
+
+  test('登录日志把真正发出去的请求和系统原话都记下来', () {
+    final attempt = ConnectAttempt(
+      at: DateTime(2026, 10, 6, 19, 30),
+      config: ConnectionConfig(
+        type: StorageType.openlist,
+        baseUrl: '192.168.1.17:5244',
+        username: 'admin',
+        password: 'secret',
+      ),
+      requestUrl: 'http://192.168.1.17:5244/dav/',
+      elapsed: const Duration(milliseconds: 812),
+      error: WebDavError(WebDavErrorKind.unauthorized, statusCode: 401, detail: 'HTTP 401'),
+    );
+    final log = attempt.render();
+    expect(log, contains('PROPFIND http://192.168.1.17:5244/dav/'));
+    expect(log, contains('失败 · unauthorized'));
+    expect(log, contains('HTTP 401'));
+    expect(log, contains('用户名或密码错误'));
+    // 密码本身不能进日志，只留长度。
+    expect(log, isNot(contains('secret')));
+    expect(log, contains('6 位'));
   });
 }

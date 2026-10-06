@@ -1,3 +1,5 @@
+import 'dart:io';
+
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../data/auth_proxy.dart';
@@ -21,11 +23,52 @@ class Session {
   final WebDavClient client;
 }
 
+/// 一次登录尝试的完整过程。连接页把它原样摊开给人看——「无法连接服务器」这种
+/// 话不够用的时候，至少能看见真实请求长什么样、系统回的原话是什么。
+class ConnectAttempt {
+  ConnectAttempt({
+    required this.at,
+    required this.config,
+    required this.requestUrl,
+    required this.elapsed,
+    this.error,
+  });
+
+  final DateTime at;
+  final ConnectionConfig config;
+
+  /// 归一化之后真正发 PROPFIND 的地址；地址本身解析不了时为 null。
+  final String? requestUrl;
+  final Duration elapsed;
+  final WebDavError? error;
+
+  bool get ok => error == null;
+
+  String render() {
+    final e = error;
+    return [
+      '时间  ${at.toIso8601String()}',
+      '系统  ${Platform.operatingSystem} ${Platform.operatingSystemVersion}',
+      '类型  ${config.type.label}',
+      '填写  ${config.baseUrl}',
+      '请求  ${requestUrl == null ? '（地址没能解析成 URL）' : 'PROPFIND $requestUrl  Depth:1'}',
+      '用户  ${config.username.isEmpty ? '（空）' : config.username}',
+      '密码  ${config.password.isEmpty ? '（空）' : '${config.password.length} 位'}',
+      '耗时  ${elapsed.inMilliseconds} ms',
+      '结果  ${e == null ? '成功' : '失败 · ${e.kind.name}'}',
+      if (e != null && e.statusCode != null) '状态  HTTP ${e.statusCode}',
+      if (e != null) '说明  ${e.message}',
+      if (e != null && (e.detail ?? '').trim().isNotEmpty) '原文  ${e.detail!.trim()}',
+    ].join('\n');
+  }
+}
+
 class ConnectResult {
-  const ConnectResult.ok() : error = null;
-  const ConnectResult.failed(this.error);
+  ConnectResult.ok(this.attempt) : error = null;
+  ConnectResult.failed(this.error, this.attempt);
 
   final WebDavError? error;
+  final ConnectAttempt attempt;
   bool get isSuccess => error == null;
   bool get needsCertificateWarning => error?.kind == WebDavErrorKind.tls;
   String get message => error?.message ?? '已连接';
@@ -33,33 +76,56 @@ class ConnectResult {
 
 /// 保存的凭据 + 一次探活，就是「自动登录」（需求 §3.1）。
 class SessionController extends AsyncNotifier<Session?> {
-  @override
-  Future<Session?> build() async {
-    final config = await ref.read(credentialStoreProvider).load();
-    if (config == null || config.baseUrl.isEmpty) return null;
-    final client = WebDavClient(config);
-    try {
-      await client.list('/');
-    } on WebDavError {
-      client.close();
-      // 自动登录失败不弹错误，停在连接页让用户自己确认。
-      return null;
-    }
-    return Session(config, client);
-  }
+  /// 最近一次探活（包括启动时那次自动登录），连接页用它填诊断面板。
+  ConnectAttempt? lastAttempt;
 
-  Future<ConnectResult> connect(ConnectionConfig config, {bool allowInsecure = false}) async {
+  /// 探活一次并留下完整过程。失败时负责关掉 client。
+  Future<({WebDavClient? client, ConnectAttempt attempt})> _probe(
+    ConnectionConfig config,
+    bool allowInsecure,
+  ) async {
     final client = WebDavClient(config, allowInsecureCertificate: allowInsecure);
+    final watch = Stopwatch()..start();
+    String? url;
     WebDavError? failure;
     try {
+      url = client.urlFor('/').toString();
       await client.list('/');
     } on WebDavError catch (e) {
       failure = e;
     }
+    watch.stop();
+    final attempt = ConnectAttempt(
+      at: DateTime.now(),
+      config: config,
+      requestUrl: url,
+      elapsed: watch.elapsed,
+      error: failure,
+    );
     if (failure != null) {
       client.close();
-      return ConnectResult.failed(failure);
+      return (client: null, attempt: attempt);
     }
+    return (client: client, attempt: attempt);
+  }
+
+  @override
+  Future<Session?> build() async {
+    final config = await ref.read(credentialStoreProvider).load();
+    if (config == null || config.baseUrl.isEmpty) return null;
+    final probe = await _probe(config, false);
+    lastAttempt = probe.attempt;
+    final client = probe.client;
+    // 自动登录失败不弹错误，停在连接页让用户自己确认。
+    if (client == null) return null;
+    return Session(config, client);
+  }
+
+  Future<ConnectResult> connect(ConnectionConfig config, {bool allowInsecure = false}) async {
+    final probe = await _probe(config, allowInsecure);
+    lastAttempt = probe.attempt;
+    final client = probe.client;
+    if (client == null) return ConnectResult.failed(probe.attempt.error!, probe.attempt);
     ref.read(sessionProvider).valueOrNull?.client.close();
     state = const AsyncLoading();
     state = AsyncData(Session(config, client));
@@ -68,7 +134,7 @@ class SessionController extends AsyncNotifier<Session?> {
     } else {
       await ref.read(credentialStoreProvider).clear();
     }
-    return const ConnectResult.ok();
+    return ConnectResult.ok(probe.attempt);
   }
 
   Future<void> forget() async {
