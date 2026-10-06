@@ -257,17 +257,10 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
                   _sfield('服务器', config?.displayHost ?? '—', mono: true),
                   GestureDetector(
                     behavior: HitTestBehavior.opaque,
-                    onTap: () => ref.read(sessionProvider.notifier).forget(),
-                    child: _sfieldAction('断开连接并忘记凭据', danger: true),
+                    onTap: () => ref.read(sessionProvider.notifier).logout(),
+                    child: _sfieldAction('退出登录', danger: true),
                   ),
                 ],
-              ),
-              const Padding(
-                padding: EdgeInsets.fromLTRB(22, 14, 22, 8),
-                child: Text(
-                  '缓存仅存于 App 沙盒 Library/Caches/Vault，不写入系统相册，相册 App 无法索引。',
-                  style: TextStyle(fontSize: 11, color: Color(0xFF4A5058), height: 1.65),
-                ),
               ),
             ],
           ),

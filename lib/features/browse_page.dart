@@ -98,6 +98,7 @@ class _BrowsePageState extends ConsumerState<BrowsePage> {
       child: Scaffold(
         body: Column(
           children: [
+            SizedBox(height: MediaQuery.of(context).padding.top),
             VaultAppBar(
               title: widget.canPop ? RemotePath.nameOf(_path) : '浏览',
               leading: widget.canPop

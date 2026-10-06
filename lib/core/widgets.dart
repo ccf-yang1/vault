@@ -196,6 +196,8 @@ class VaultTextField extends StatelessWidget {
     this.autofillHints,
     this.onSubmitted,
     this.enabled = true,
+    this.showClear = false,
+    this.onCleared,
     super.key,
   });
 
@@ -209,6 +211,10 @@ class VaultTextField extends StatelessWidget {
   final List<String>? autofillHints;
   final ValueChanged<String>? onSubmitted;
   final bool enabled;
+
+  /// 有内容时框尾显示一个清空按钮；点它清空这行并回调 [onCleared]。
+  final bool showClear;
+  final VoidCallback? onCleared;
 
   @override
   Widget build(BuildContext context) {
@@ -230,30 +236,48 @@ class VaultTextField extends StatelessWidget {
             borderRadius: BorderRadius.circular(VaultRadius.field),
             border: Border.all(color: VaultColors.line),
           ),
-          child: Row(
-            children: [
-              VIcon(icon, size: 15, color: VaultColors.dim),
-              const SizedBox(width: 10),
-              Expanded(
-                child: TextField(
-                  controller: controller,
-                  obscureText: obscure,
-                  enabled: enabled,
-                  keyboardType: keyboardType,
-                  autofillHints: autofillHints,
-                  textInputAction: textInputAction ?? (onSubmitted == null ? TextInputAction.done : TextInputAction.next),
-                  onSubmitted: onSubmitted,
-                  style: const TextStyle(fontSize: 13.5, color: Color(0xFFD6D9DE)),
-                  decoration: InputDecoration(
-                    isDense: true,
-                    border: InputBorder.none,
-                    contentPadding: EdgeInsets.zero,
-                    hintText: placeholder,
-                    hintStyle: const TextStyle(fontSize: 13.5, color: Color(0xFF4A5058)),
+          child: ValueListenableBuilder<TextEditingValue>(
+            valueListenable: controller,
+            builder: (context, value, child) {
+              final showX = showClear && value.text.isNotEmpty;
+              return Row(
+                children: [
+                  VIcon(icon, size: 15, color: VaultColors.dim),
+                  const SizedBox(width: 10),
+                  Expanded(
+                    child: TextField(
+                      controller: controller,
+                      obscureText: obscure,
+                      enabled: enabled,
+                      keyboardType: keyboardType,
+                      autofillHints: autofillHints,
+                      textInputAction: textInputAction ?? (onSubmitted == null ? TextInputAction.done : TextInputAction.next),
+                      onSubmitted: onSubmitted,
+                      style: const TextStyle(fontSize: 13.5, color: Color(0xFFD6D9DE)),
+                      decoration: InputDecoration(
+                        isDense: true,
+                        border: InputBorder.none,
+                        contentPadding: EdgeInsets.zero,
+                        hintText: placeholder,
+                        hintStyle: const TextStyle(fontSize: 13.5, color: Color(0xFF4A5058)),
+                      ),
+                    ),
                   ),
-                ),
-              ),
-            ],
+                  if (showX)
+                    GestureDetector(
+                      behavior: HitTestBehavior.opaque,
+                      onTap: () {
+                        controller.clear();
+                        onCleared?.call();
+                      },
+                      child: const Padding(
+                        padding: EdgeInsets.only(left: 8),
+                        child: VIcon('close', size: 15, color: Color(0xFF4A5058)),
+                      ),
+                    ),
+                ],
+              );
+            },
           ),
         ),
         const SizedBox(height: 15),
@@ -393,47 +417,50 @@ class VaultBottomBar extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Container(
-      height: 72,
       decoration: const BoxDecoration(
         color: Color(0xF0121417),
         border: Border(top: BorderSide(color: VaultColors.line)),
       ),
       child: SafeArea(
         top: false,
-        child: Padding(
-          padding: const EdgeInsets.only(bottom: 18),
-          child: Row(
-            children: [
-              for (var i = 0; i < _items.length; i++)
-                Expanded(
-                  child: GestureDetector(
-                    behavior: HitTestBehavior.opaque,
-                    onTap: () {
-                      HapticFeedback.selectionClick();
-                      onSelect(i);
-                    },
-                    child: Column(
-                      mainAxisAlignment: MainAxisAlignment.center,
-                      children: [
-                        VIcon(
-                          i == index ? _items[i].activeIcon : _items[i].idleIcon,
-                          size: 21,
-                          color: i == index ? VaultColors.accent : VaultColors.dim,
-                        ),
-                        const SizedBox(height: 4),
-                        Text(
-                          _items[i].label,
-                          style: TextStyle(
-                            fontSize: 10,
-                            letterSpacing: 0.3,
+        child: SizedBox(
+          height: 68,
+          child: Padding(
+            padding: const EdgeInsets.fromLTRB(0, 8, 0, 8),
+            child: Row(
+              children: [
+                for (var i = 0; i < _items.length; i++)
+                  Expanded(
+                    child: GestureDetector(
+                      behavior: HitTestBehavior.opaque,
+                      onTap: () {
+                        HapticFeedback.selectionClick();
+                        onSelect(i);
+                      },
+                      child: Column(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: [
+                          VIcon(
+                            i == index ? _items[i].activeIcon : _items[i].idleIcon,
+                            size: 25,
                             color: i == index ? VaultColors.accent : VaultColors.dim,
                           ),
-                        ),
-                      ],
+                          const SizedBox(height: 5),
+                          Text(
+                            _items[i].label,
+                            style: TextStyle(
+                              fontSize: 11,
+                              letterSpacing: 0.3,
+                              fontWeight: i == index ? FontWeight.w600 : FontWeight.w400,
+                              color: i == index ? VaultColors.accent : VaultColors.dim,
+                            ),
+                          ),
+                        ],
+                      ),
                     ),
                   ),
-                ),
-            ],
+              ],
+            ),
           ),
         ),
       ),

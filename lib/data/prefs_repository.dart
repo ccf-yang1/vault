@@ -12,6 +12,7 @@ class PrefsRepository {
 
   static const _settingsKey = 'vault.settings';
   static const _hiddenKey = 'vault.hidden_dirs';
+  static const _draftKey = 'vault.draft';
 
   final SharedPreferences _prefs;
 
@@ -71,4 +72,21 @@ class PrefsRepository {
     current.add(entry);
     await saveHidden(current);
   }
+
+  /// 连接页表单草稿：需求 §5「登录信息一直在」的载体——明文存 prefs，
+  /// 只在用户点清空或成功登录（remember）时才增删；Keychain 里那份是另一回事。
+  ConnectionConfig? loadDraft() {
+    final raw = _prefs.getString(_draftKey);
+    if (raw == null || raw.isEmpty) return null;
+    try {
+      return ConnectionConfig.fromJson(jsonDecode(raw) as Map<String, dynamic>);
+    } on Object {
+      return null;
+    }
+  }
+
+  Future<void> saveDraft(ConnectionConfig draft) =>
+      _prefs.setString(_draftKey, jsonEncode(draft.toJson()));
+
+  Future<void> clearDraft() => _prefs.remove(_draftKey);
 }

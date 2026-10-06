@@ -214,9 +214,10 @@ class SessionController extends AsyncNotifier<Session?> {
     return ConnectResult.ok(probe.attempt);
   }
 
-  Future<void> forget() async {
+  /// 退出登录：只断开当前会话，凭据原样留着——下次打开照常自动登录。
+  /// 真要把本机记录抹掉，去连接页点输入框后面的清空。
+  Future<void> logout() async {
     ref.read(sessionProvider).valueOrNull?.client.close();
-    await ref.read(credentialStoreProvider).clear();
     state = const AsyncData(null);
   }
 }

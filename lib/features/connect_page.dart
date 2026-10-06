@@ -27,28 +27,36 @@ class _ConnectPageState extends ConsumerState<ConnectPage> {
   String? _error;
   ConnectAttempt? _attempt;
   bool _showLog = false;
+  bool _draftLoaded = false;
 
   @override
   void initState() {
     super.initState();
-    _prefillSaved();
+    _url.addListener(_saveDraft);
+    _user.addListener(_saveDraft);
+    _pass.addListener(_saveDraft);
+    _restore();
   }
 
-  Future<void> _prefillSaved() async {
+  /// 草稿优先、其次 Keychain：用户输入过的东西一直在，自动登录失败也能原样摊回来。
+  Future<void> _restore() async {
+    final draft = ref.read(prefsProvider).loadDraft();
     final saved = await ref.read(credentialStoreProvider).load();
-    if (saved == null || !mounted) return;
-    // 自动登录失败才会走到这里，把上次的信息填回去，用户只改错的那一项。
-    setState(() {
-      _type = saved.type;
-      _remember = saved.remember;
-      if (_url.text.isEmpty) _url.text = saved.baseUrl;
-      if (_user.text.isEmpty) _user.text = saved.username;
-      if (_pass.text.isEmpty) _pass.text = saved.password;
-    });
-    // 自动登录失败是不弹错的（免得开屏就跳告警），但过程得留在这里，
-    // 否则用户只会看到一张空表单，完全不知道刚才发生了什么。
+    if (!mounted) return;
+    final source = draft ?? saved;
+    if (source != null) {
+      setState(() {
+        _type = source.type;
+        _remember = source.remember;
+        if (_url.text.isEmpty) _url.text = source.baseUrl;
+        if (_user.text.isEmpty) _user.text = source.username;
+        if (_pass.text.isEmpty) _pass.text = source.password;
+      });
+    }
+    _draftLoaded = true;
+    // 自动登录失败不弹告警，但过程得留在诊断面板里，否则只剩一张空表单。
     final attempt = ref.read(sessionProvider.notifier).lastAttempt;
-    if (attempt != null && !attempt.ok && mounted) {
+    if (attempt != null && !attempt.ok) {
       setState(() {
         _attempt = attempt;
         _error = attempt.advice;
@@ -57,8 +65,41 @@ class _ConnectPageState extends ConsumerState<ConnectPage> {
     }
   }
 
+  ConnectionConfig _draft() => ConnectionConfig(
+        type: _type,
+        baseUrl: _url.text,
+        username: _user.text,
+        password: _pass.text,
+        remember: _remember,
+      );
+
+  void _saveDraft() {
+    if (!_draftLoaded) return;
+    ref.read(prefsProvider).saveDraft(_draft());
+  }
+
+  /// 清空某一行：框里的字由输入框自己清了，这里负责把 Keychain 那格也抹掉，
+  /// 整张表单都空了就整条删——否则下次打开旧凭据又会冒回来。
+  Future<void> _clearSaved({required bool url, required bool user, required bool pass}) async {
+    final saved = await ref.read(credentialStoreProvider).load();
+    if (saved == null) return;
+    final next = _draft();
+    if (next.baseUrl.isEmpty && next.username.isEmpty && next.password.isEmpty) {
+      await ref.read(credentialStoreProvider).clear();
+    } else {
+      await ref.read(credentialStoreProvider).save(saved.copyWith(
+        baseUrl: url ? '' : null,
+        username: user ? '' : null,
+        password: pass ? '' : null,
+      ));
+    }
+  }
+
   @override
   void dispose() {
+    _url.removeListener(_saveDraft);
+    _user.removeListener(_saveDraft);
+    _pass.removeListener(_saveDraft);
     _url.dispose();
     _user.dispose();
     _pass.dispose();
@@ -88,6 +129,8 @@ class _ConnectPageState extends ConsumerState<ConnectPage> {
     final result = await ref.read(sessionProvider.notifier).connect(config, allowInsecure: allowInsecure);
     if (!mounted) return;
     if (result.isSuccess) {
+      // 成功即转正式凭据（Keychain），草稿使命完成，免得下次还带着一堆中间输入。
+      await ref.read(prefsProvider).clearDraft();
       setState(() => _busy = false);
       return; // redirect 会把我们换成主框架
     }
@@ -158,7 +201,7 @@ class _ConnectPageState extends ConsumerState<ConnectPage> {
               const Text('连接到你的存储', style: TextStyle(fontSize: 22, fontWeight: FontWeight.w600, color: Color(0xFFF0F1F3))),
               const SizedBox(height: 9),
               const Text(
-                '支持 WebDAV 与 OpenList。\n凭据将保存在 App 沙盒内，仅用于本机自动登录。',
+                '支持 WebDAV 与 OpenList。',
                 style: TextStyle(fontSize: 12.5, color: VaultColors.muted, height: 1.65),
               ),
               const SizedBox(height: 22),
@@ -173,6 +216,8 @@ class _ConnectPageState extends ConsumerState<ConnectPage> {
                     : 'https://dav.example.com/dav',
                 keyboardType: TextInputType.url,
                 onSubmitted: (_) => _focusNext(_user),
+                showClear: true,
+                onCleared: () => _clearSaved(url: true, user: false, pass: false),
               ),
               VaultTextField(
                 label: '用户名',
@@ -182,6 +227,8 @@ class _ConnectPageState extends ConsumerState<ConnectPage> {
                 keyboardType: TextInputType.name,
                 textInputAction: TextInputAction.next,
                 onSubmitted: (_) => _focusNext(_pass),
+                showClear: true,
+                onCleared: () => _clearSaved(url: false, user: true, pass: false),
               ),
               VaultTextField(
                 label: '密码',
@@ -189,14 +236,19 @@ class _ConnectPageState extends ConsumerState<ConnectPage> {
                 controller: _pass,
                 obscure: _obscure,
                 placeholder: '••••••••',
+                showClear: true,
+                onCleared: () => _clearSaved(url: false, user: false, pass: true),
               ),
               _passwordToggle(),
               const SizedBox(height: 8),
               ToggleRow(
                 title: '在此设备记住凭据',
-                subtitle: '加密存于 App 沙盒，下次打开自动登录',
+                subtitle: '下次打开自动登录',
                 value: _remember,
-                onChanged: (v) => setState(() => _remember = v),
+                onChanged: (v) => setState(() {
+                  _remember = v;
+                  _saveDraft();
+                }),
               ),
               const SizedBox(height: 18),
               PrimaryButton(label: _busy ? '连接中' : '连 接', loading: _busy, onPressed: _connect),
@@ -225,15 +277,6 @@ class _ConnectPageState extends ConsumerState<ConnectPage> {
                 ),
               ],
               _diagnostics(),
-              const SizedBox(height: 15),
-              const Row(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  VIcon('shield', size: 13, color: VaultColors.dim),
-                  SizedBox(width: 6),
-                  Text('缓存不写入系统相册 · 相册 App 无法索引', style: TextStyle(fontSize: 11.5, color: VaultColors.dim)),
-                ],
-              ),
             ],
           ),
         ),
@@ -258,7 +301,10 @@ class _ConnectPageState extends ConsumerState<ConnectPage> {
             Expanded(
               child: GestureDetector(
                 behavior: HitTestBehavior.opaque,
-                onTap: () => setState(() => _type = type),
+                onTap: () => setState(() {
+                  _type = type;
+                  _saveDraft();
+                }),
                 child: Container(
                   padding: const EdgeInsets.symmetric(vertical: 8),
                   alignment: Alignment.center,

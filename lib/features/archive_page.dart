@@ -295,12 +295,38 @@ class _ArchivePageState extends ConsumerState<ArchivePage> {
   }
 }
 
-/// 压缩包里的图片：文件已经解压在沙盒，直接本地展示。
-class _ExtractedImageView extends StatelessWidget {
+/// 压缩包里的图片：文件已经解压在沙盒，直接本地展示，可双指/双击放大。
+class _ExtractedImageView extends StatefulWidget {
   const _ExtractedImageView({required this.entry, required this.file});
 
   final RemoteEntry entry;
   final File file;
+
+  @override
+  State<_ExtractedImageView> createState() => _ExtractedImageViewState();
+}
+
+class _ExtractedImageViewState extends State<_ExtractedImageView> {
+  final TransformationController _matrix = TransformationController();
+
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addPostFrameCallback((_) => precacheImage(FileImage(widget.file), context));
+  }
+
+  @override
+  void dispose() {
+    _matrix.dispose();
+    super.dispose();
+  }
+
+  void _toggleZoom() {
+    final zoomed = _matrix.value.getMaxScaleOnAxis() > 1.01;
+    _matrix.value = zoomed
+        ? Matrix4.identity()
+        : Matrix4.identity()..scaleByDouble(2.5, 2.5, 2.5, 1.0);
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -309,20 +335,23 @@ class _ExtractedImageView extends StatelessWidget {
         backgroundColor: Colors.black,
         body: Column(
           children: [
+            SizedBox(height: MediaQuery.of(context).padding.top),
             VaultAppBar(
               leading: IconBtn(icon: 'back', color: VaultColors.text, onTap: () => Navigator.of(context).maybePop()),
-              title: entry.name,
-              subtitle: '来自压缩包 · ${formatBytes(entry.size)}',
+              title: widget.entry.name,
+              subtitle: '来自压缩包 · ${formatBytes(widget.entry.size)}',
             ),
             Expanded(
-              child: InteractiveViewer(
-                maxScale: 6,
-                child: Center(child: Image(image: FileImage(file), fit: BoxFit.contain)),
+              child: GestureDetector(
+                behavior: HitTestBehavior.opaque,
+                onDoubleTap: _toggleZoom,
+                child: InteractiveViewer(
+                  transformationController: _matrix,
+                  maxScale: 8,
+                  boundaryMargin: const EdgeInsets.all(80),
+                  child: Center(child: Image(image: FileImage(widget.file), fit: BoxFit.contain, gaplessPlayback: true)),
+                ),
               ),
-            ),
-            const Padding(
-              padding: EdgeInsets.fromLTRB(16, 6, 16, 14),
-              child: Text('解压到 App 沙盒后查看，不写入相册', style: TextStyle(fontSize: 10.5, color: VaultColors.dim)),
             ),
           ],
         ),

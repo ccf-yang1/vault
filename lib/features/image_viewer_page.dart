@@ -78,6 +78,7 @@ class _ImageViewerPageState extends ConsumerState<ImageViewerPage> {
         backgroundColor: Colors.black,
         body: Column(
           children: [
+            SizedBox(height: MediaQuery.of(context).padding.top),
             VaultAppBar(
               leading: IconBtn(icon: 'back', color: VaultColors.text, onTap: () => Navigator.of(context).maybePop()),
               title: current.name,
@@ -88,6 +89,8 @@ class _ImageViewerPageState extends ConsumerState<ImageViewerPage> {
               child: PageView.builder(
                 controller: _controller,
                 itemCount: images.length,
+                // 相邻页提前构建，翻过去立刻能双指放大，不用干等缓存。
+                allowImplicitScrolling: true,
                 onPageChanged: (index) {
                   setState(() => _index = index);
                   _preload(index);
@@ -130,7 +133,7 @@ class _ImageViewerPageState extends ConsumerState<ImageViewerPage> {
                   const VIcon('cloudUp', size: 13, color: VaultColors.green),
                   const SizedBox(width: 6),
                   Text(
-                    '沙盒预加载 $cached / ${images.length}',
+                    '预加载 $cached / ${images.length}',
                     style: const TextStyle(fontSize: 11, color: VaultColors.green, letterSpacing: 0.2),
                   ),
                   const Spacer(),
@@ -186,10 +189,6 @@ class _ImageViewerPageState extends ConsumerState<ImageViewerPage> {
                 },
               ),
             ),
-            const Padding(
-              padding: EdgeInsets.fromLTRB(16, 6, 16, 10),
-              child: Text('仅内存 / 沙盒缓存，不写入相册', style: TextStyle(fontSize: 10.5, color: VaultColors.dim)),
-            ),
           ],
         ),
       ),
@@ -215,11 +214,6 @@ class _ImageViewerPageState extends ConsumerState<ImageViewerPage> {
                 '大小  ${entry.size > 0 ? formatBytes(entry.size) : '未知'}',
                 style: const TextStyle(fontSize: 12, color: VaultColors.muted, height: 1.6),
               ),
-              const SizedBox(height: 14),
-              const Text(
-                '这张图缓存在 App 沙盒的 Library/Caches/Vault 下，相册 App 看不到它。',
-                style: TextStyle(fontSize: 11.5, color: VaultColors.dim, height: 1.6),
-              ),
             ],
           ),
         ),
@@ -228,15 +222,33 @@ class _ImageViewerPageState extends ConsumerState<ImageViewerPage> {
   }
 }
 
-class _ImagePage extends ConsumerWidget {
+class _ImagePage extends ConsumerStatefulWidget {
   const _ImagePage({required this.entry, required this.onLoaded});
 
   final RemoteEntry entry;
   final ValueChanged<File> onLoaded;
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
-    final file = ref.watch(cachedFileProvider(cacheKeyFor(entry)));
+  ConsumerState<_ImagePage> createState() => _ImagePageState();
+}
+
+class _ImagePageState extends ConsumerState<_ImagePage> {
+  final TransformationController _matrix = TransformationController();
+
+  @override
+  void dispose() {
+    _matrix.dispose();
+    super.dispose();
+  }
+
+  void _toggleZoom() {
+    final zoomed = _matrix.value.getMaxScaleOnAxis() > 1.01;
+    _matrix.value = zoomed ? Matrix4.identity() : Matrix4.identity()..scaleByDouble(2.5, 2.5, 2.5, 1.0);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final file = ref.watch(cachedFileProvider(cacheKeyFor(widget.entry)));
     return file.when(
       loading: () => const Center(
         child: SizedBox(
@@ -256,10 +268,20 @@ class _ImagePage extends ConsumerWidget {
         ),
       ),
       data: (value) {
-        WidgetsBinding.instance.addPostFrameCallback((_) => onLoaded(value));
-        return InteractiveViewer(
-          maxScale: 6,
-          child: Center(child: Image(image: FileImage(value), fit: BoxFit.contain, gaplessPlayback: true)),
+        WidgetsBinding.instance.addPostFrameCallback((_) {
+          // 预解码，双指放大时不至于先糊一下。
+          precacheImage(FileImage(value), context);
+          widget.onLoaded(value);
+        });
+        return GestureDetector(
+          behavior: HitTestBehavior.opaque,
+          onDoubleTap: _toggleZoom,
+          child: InteractiveViewer(
+            transformationController: _matrix,
+            maxScale: 8,
+            boundaryMargin: const EdgeInsets.all(80),
+            child: Center(child: Image(image: FileImage(value), fit: BoxFit.contain, gaplessPlayback: true)),
+          ),
         );
       },
     );

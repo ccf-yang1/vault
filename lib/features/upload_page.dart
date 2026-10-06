@@ -103,7 +103,6 @@ class _UploadPageState extends ConsumerState<UploadPage> {
               Expanded(child: _assets(state, controller)),
               if (state.uploading || state.tasks.isNotEmpty) _queue(state, controller),
               _selBar(state, controller),
-              _sandboxNote(),
             ],
           ),
         ),
@@ -406,25 +405,6 @@ class _UploadPageState extends ConsumerState<UploadPage> {
                     : () => controller.startUpload(_directory),
               ),
             ],
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _sandboxNote() {
-    return Padding(
-      padding: const EdgeInsets.fromLTRB(16, 0, 16, 10),
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: const [
-          Padding(padding: EdgeInsets.only(top: 1), child: VIcon('shieldCheck', size: 13, color: VaultColors.green)),
-          SizedBox(width: 7),
-          Expanded(
-            child: Text(
-              '上传过程只借道 App 沙盒临时文件，传完立刻删除；不会写入系统相册。',
-              style: TextStyle(fontSize: 11, color: Color(0xFF6F8A80), height: 1.55),
-            ),
           ),
         ],
       ),
