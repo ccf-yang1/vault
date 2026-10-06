@@ -314,6 +314,31 @@ void main() {
     expect(forUrl('https://dav.example.com/dav').targetsLocalNetwork, isFalse);
   });
 
+  test('本地网络被拦时先分清是「包里没声明」还是「系统里没允许」', () {
+    ConnectAttempt attempt(bool declared) => ConnectAttempt(
+          at: DateTime(2026, 10, 6, 19, 30),
+          config: ConnectionConfig(
+            type: StorageType.webdav,
+            baseUrl: 'http://192.168.1.17:5244/dav',
+            username: 'a',
+            password: 'b',
+          ),
+          requestUrl: 'http://192.168.1.17:5244/dav/',
+          elapsed: const Duration(milliseconds: 12),
+          error: WebDavError(WebDavErrorKind.localNetworkBlocked),
+          declaresLocalNetwork: declared,
+          reachability: '公网 223.5.5.5:443 → 可达；192.168.1.17:5244 → 不可达（No route to host）',
+        );
+
+    // 旧包缺声明：再怎么让用户去设置里找都找不到这个 App。
+    expect(attempt(false).advice, contains('这个安装包里没有'));
+    expect(attempt(false).render(), contains('安装包缺少 NSLocalNetworkUsageDescription'));
+    // 声明齐了还被拦：才是真的没在系统里允许。
+    expect(attempt(true).advice, contains('隐私与安全性'));
+    // 对照结果只在日志里，用来排除「手机根本没网」。
+    expect(attempt(true).render(), contains('公网 223.5.5.5:443 → 可达'));
+  });
+
   test('登录日志把真正发出去的请求和系统原话都记下来', () {
     final attempt = ConnectAttempt(
       at: DateTime(2026, 10, 6, 19, 30),

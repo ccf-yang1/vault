@@ -1,3 +1,4 @@
+import 'dart:convert';
 import 'dart:io';
 
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -32,6 +33,8 @@ class ConnectAttempt {
     required this.requestUrl,
     required this.elapsed,
     this.error,
+    this.declaresLocalNetwork = true,
+    this.reachability,
   });
 
   final DateTime at;
@@ -42,7 +45,25 @@ class ConnectAttempt {
   final Duration elapsed;
   final WebDavError? error;
 
+  /// 安装包自己的 Info.plist 里有没有 `NSLocalNetworkUsageDescription`。
+  /// iOS 只认二进制里的这个键：没有它既不弹框、也不会在设置里列出 App。
+  final bool declaresLocalNetwork;
+
+  /// 公网 / 目标地址的 TCP 对照结果，用来区分「手机没网」和「局域网被拦」。
+  final String? reachability;
+
   bool get ok => error == null;
+
+  /// 给用户看的那一句。本地网络被拦有两种完全不同的成因，混在一起说等于没说。
+  String get advice {
+    final e = error;
+    if (e == null) return '已连接';
+    if (e.kind == WebDavErrorKind.localNetworkBlocked && !declaresLocalNetwork) {
+      return '这个安装包里没有「本地网络」权限声明，iOS 会直接拒掉对局域网的连接。'
+          '请改装最近一次构建的 IPA（旧包重装也不会补上这个键）。';
+    }
+    return e.message;
+  }
 
   String render() {
     final e = error;
@@ -57,8 +78,10 @@ class ConnectAttempt {
       '耗时  ${elapsed.inMilliseconds} ms',
       '结果  ${e == null ? '成功' : '失败 · ${e.kind.name}'}',
       if (e != null && e.statusCode != null) '状态  HTTP ${e.statusCode}',
-      if (e != null) '说明  ${e.message}',
+      if (e != null) '说明  $advice',
       if (e != null && (e.detail ?? '').trim().isNotEmpty) '原文  ${e.detail!.trim()}',
+      '声明  ${declaresLocalNetwork ? '安装包已含 NSLocalNetworkUsageDescription' : '安装包缺少 NSLocalNetworkUsageDescription'}',
+      if (reachability != null) '对照  $reachability',
     ].join('\n');
   }
 }
@@ -71,7 +94,45 @@ class ConnectResult {
   final ConnectAttempt attempt;
   bool get isSuccess => error == null;
   bool get needsCertificateWarning => error?.kind == WebDavErrorKind.tls;
-  String get message => error?.message ?? '已连接';
+  String get message => attempt.advice;
+}
+
+/// 读自己包里的 Info.plist，看有没有声明本地网络权限。
+///
+/// iOS 只在二进制里有这个键时才会弹框、才会把 App 列进 设置 → 隐私与安全性 → 本地网络，
+/// 所以「设置里找不到这个 App」本身就意味着跑的是没声明的那版包。binary plist 的键名
+/// 是明文 ASCII，直接按字节找子串就够，不必引一个 plist 解析器。
+bool bundleDeclaresLocalNetwork() {
+  try {
+    final bundle = File(Platform.resolvedExecutable).parent;
+    final plist = File('${bundle.path}/Info.plist');
+    if (!plist.existsSync()) return false;
+    return latin1
+        .decode(plist.readAsBytesSync(), allowInvalid: true)
+        .contains('NSLocalNetworkUsageDescription');
+  } catch (_) {
+    return false;
+  }
+}
+
+/// 公网和目标各试一次 TCP：只有「公网通、局域网不通」才说明是局域网那一层被拦，
+/// 两台都不通就是手机根本没网 / 连错 Wi-Fi。
+Future<String> reachabilityProbe(String lanHost, int lanPort) async {
+  final public = await _tryConnect('223.5.5.5', 443);
+  final local = await _tryConnect(lanHost, lanPort);
+  return '公网 223.5.5.5:443 → $public；$lanHost:$lanPort → $local';
+}
+
+Future<String> _tryConnect(String host, int port) async {
+  try {
+    final socket = await Socket.connect(host, port, timeout: const Duration(seconds: 5));
+    socket.destroy();
+    return '可达';
+  } on SocketException catch (e) {
+    return '不可达（${e.osError?.message ?? e.message}）';
+  } catch (e) {
+    return '失败（$e）';
+  }
 }
 
 /// 保存的凭据 + 一次探活，就是「自动登录」（需求 §3.1）。
@@ -95,12 +156,28 @@ class SessionController extends AsyncNotifier<Session?> {
       failure = e;
     }
     watch.stop();
+    // 连不上时才花这一趟：能明确区分「手机没网」和「局域网被拦」，
+    // 前者再怎么改 App 都没用，后者才是本地网络权限。
+    String? reach;
+    if (failure != null &&
+        const {
+          WebDavErrorKind.network,
+          WebDavErrorKind.localNetworkBlocked,
+          WebDavErrorKind.timeout,
+        }.contains(failure.kind)) {
+      final uri = url == null ? null : Uri.tryParse(url);
+      if (uri != null && uri.host.isNotEmpty) {
+        reach = await reachabilityProbe(uri.host, uri.port);
+      }
+    }
     final attempt = ConnectAttempt(
       at: DateTime.now(),
       config: config,
       requestUrl: url,
       elapsed: watch.elapsed,
       error: failure,
+      declaresLocalNetwork: bundleDeclaresLocalNetwork(),
+      reachability: reach,
     );
     if (failure != null) {
       client.close();

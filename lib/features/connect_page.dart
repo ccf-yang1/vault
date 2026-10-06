@@ -51,7 +51,7 @@ class _ConnectPageState extends ConsumerState<ConnectPage> {
     if (attempt != null && !attempt.ok && mounted) {
       setState(() {
         _attempt = attempt;
-        _error = attempt.error!.message;
+        _error = attempt.advice;
         _showLog = true;
       });
     }
