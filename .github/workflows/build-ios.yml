@@ -39,6 +39,34 @@ jobs:
       - name: Generate iOS project
         run: flutter create --platforms=ios --org com.valo2 --project-name vault .
 
+      # 单尺寸 1024 universal AppIcon（Xcode 14+ 标准）：主屏 / Spotlight /
+      # 设置 / 多任务切换由同一张图派生，不必再逐个尺寸缩放。
+      - name: Set app icon
+        run: |
+          set -e
+          ICONSET=ios/Runner/Assets.xcassets/AppIcon.appiconset
+          python3 - <<'PY'
+          import json, os
+
+          iconset = 'ios/Runner/Assets.xcassets/AppIcon.appiconset'
+          data = {
+              'images': [
+                  {
+                      'filename': 'Icon-1024.png',
+                      'idiom': 'universal',
+                      'platform': 'ios',
+                      'size': '1024x1024',
+                  }
+              ],
+              'info': {'author': 'xcode', 'version': 1},
+          }
+          with open(os.path.join(iconset, 'Contents.json'), 'w') as f:
+              json.dump(data, f, indent=2)
+          print('single-size 1024 AppIcon written')
+          PY
+          cp assets/icons/app_icon.png "$ICONSET/Icon-1024.png"
+          ls -la "$ICONSET"
+
       - name: Remove generated widget test
         run: rm -f test/widget_test.dart
 

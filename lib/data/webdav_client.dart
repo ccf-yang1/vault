@@ -19,6 +19,10 @@ enum WebDavErrorKind {
   tls,
   canceled,
   rangeUnsupported,
+  notWebDavRoot,
+  tooManyAttempts,
+  schemeMismatch,
+  writeDisabled,
   server,
   network,
 }
@@ -32,16 +36,22 @@ class WebDavError implements Exception {
   final String? detail;
 
   String get message => switch (kind) {
-        WebDavErrorKind.badConfig => '地址格式不对，请填写完整 URL，例如 http://192.168.1.17:5244/dav',
+        WebDavErrorKind.badConfig => '地址格式不对，请填写完整 URL，例如 http://192.168.1.100:5244/dav',
         WebDavErrorKind.unauthorized => '用户名或密码错误',
-        WebDavErrorKind.forbidden => '没有访问该目录的权限',
+        WebDavErrorKind.forbidden => '已登录，但这个账号没有读取这里的权限（OpenList 后台的用户权限里勾上 WebDAV 读取）',
         WebDavErrorKind.notFound => '路径不存在，可能已被移动或重命名',
         WebDavErrorKind.conflict => '上级目录不存在或不可写',
         WebDavErrorKind.insufficientStorage => '服务器空间不足',
         WebDavErrorKind.timeout => '连接超时，检查服务器是否在运行',
-        WebDavErrorKind.tls => '证书不受信任（自签或已过期）',
+        WebDavErrorKind.tls => '证书不受信任（自签或已过期）。如果这台服务器是明文服务，地址请用 http:// 开头',
         WebDavErrorKind.canceled => '已取消',
         WebDavErrorKind.rangeUnsupported => '服务器不支持分段请求',
+        WebDavErrorKind.notWebDavRoot => '这个地址不是 WebDAV 入口。OpenList 要填到 /dav，例如 http://192.168.1.100:5244/dav',
+        // OpenList / Alist 的 WebDAV 中间件按 IP 计数，5 次失败锁 5 分钟（server/webdav.go）。
+        WebDavErrorKind.tooManyAttempts => '连续失败次数太多，服务器把这个 IP 临时锁了 5 分钟，先等一会儿再试',
+        WebDavErrorKind.schemeMismatch => '这个端口像是明文 HTTP 服务，请把地址改成 http:// 开头',
+        // OpenList / Alist 把 WebDAV 的读和写分成两档权限，新建用户默认只给读（server/webdav.go）。
+        WebDavErrorKind.writeDisabled => '这个账号只能看不能传，请在 OpenList 后台的用户权限里勾上 WebDAV 写入',
         WebDavErrorKind.server => '服务器错误${statusCode == null ? '' : ' ($statusCode)'}',
         WebDavErrorKind.network => '无法连接服务器${statusCode == null ? '' : ' (HTTP $statusCode)'}',
       };
@@ -56,7 +66,8 @@ class WebDavError implements Exception {
     if (e.error is HandshakeException) {
       final text = e.error.toString();
       final isCert = text.toLowerCase().contains('certificate') || text.contains('x509');
-      return WebDavError(isCert ? WebDavErrorKind.tls : WebDavErrorKind.network, detail: text);
+      // 不是证书问题却握手失败，基本都是拿 https 去连明文端口。
+      return WebDavError(isCert ? WebDavErrorKind.tls : WebDavErrorKind.schemeMismatch, detail: text);
     }
     if (e.error is SocketException) {
       return WebDavError(WebDavErrorKind.network, detail: e.error.toString());
@@ -73,12 +84,19 @@ class WebDavError implements Exception {
       404 => WebDavErrorKind.notFound,
       405 || 409 => WebDavErrorKind.conflict,
       416 => WebDavErrorKind.rangeUnsupported,
+      429 => WebDavErrorKind.tooManyAttempts,
       507 => WebDavErrorKind.insufficientStorage,
       >= 500 => WebDavErrorKind.server,
       _ => WebDavErrorKind.network,
     };
     return WebDavError(kind, statusCode: code, detail: body?.toString());
   }
+
+  /// 写请求（PUT / MKCOL）撞到的 403 基本都是「没开 WebDAV 写入」，
+  /// 跟读不到混成一句话会让人反复改密码。
+  static WebDavError forWrite(WebDavError e) => e.kind == WebDavErrorKind.forbidden
+      ? WebDavError(WebDavErrorKind.writeDisabled, statusCode: e.statusCode, detail: e.detail)
+      : e;
 }
 
 /// v1 只走 WebDAV 协议：OpenList 也连它的 `/dav` 入口（需求 §1 处理原则）。
@@ -99,16 +117,44 @@ class WebDavClient {
   late final Dio _dio;
 
   /// WebDAV 根：baseUrl 本身，所有远程路径都相对它拼接。
-  late final Uri _base = Uri.parse(normalizeBase(config.baseUrl));
+  late final Uri _base = Uri.parse(normalizeBase(config.baseUrl, config.type));
 
-  static String normalizeBase(String raw) {
+  static final _scheme = RegExp(r'^[a-zA-Z][a-zA-Z0-9+.\-]*://');
+
+  /// 把用户手打的地址变成真正能用的 WebDAV 根。
+  ///
+  /// 有两件事必须替用户做掉，否则「明明正确的地址」会一路 405 / 握手失败，
+  /// 看上去就跟密码错一样：
+  /// 1. 省略协议时，IP / localhost / .local 这类内网地址走 http，其余走 https；
+  /// 2. 选了 OpenList 就补上 `/dav`，它的所有 WebDAV 路由都挂在这个前缀下。
+  static String normalizeBase(String raw, [StorageType type = StorageType.webdav]) {
     var s = raw.trim();
     if (s.isEmpty) throw WebDavError(WebDavErrorKind.badConfig);
-    if (!s.contains('://')) s = 'https://$s';
-    while (s.endsWith('/')) {
-      s = s.substring(0, s.length - 1);
+    // 中间有空白的从来不是合法 URL，Uri.parse 却会把它们percent 编码后将就解析出来。
+    if (s.contains(RegExp(r'\s'))) throw WebDavError(WebDavErrorKind.badConfig);
+    if (!_scheme.hasMatch(s)) s = '${_looksLikeLan(s) ? 'http' : 'https'}://$s';
+    final uri = Uri.tryParse(s);
+    if (uri == null || !uri.hasScheme || uri.host.isEmpty) {
+      throw WebDavError(WebDavErrorKind.badConfig);
     }
-    return s;
+    var path = uri.path;
+    if (type == StorageType.openlist && (path.isEmpty || path == '/')) path = '/dav';
+    while (path.endsWith('/')) {
+      path = path.substring(0, path.length - 1);
+    }
+    return uri.replace(path: path).toString();
+  }
+
+  static bool _looksLikeLan(String url) {
+    var authority = url.replaceFirst(_scheme, '').split('/').first;
+    if (authority.contains('@')) authority = authority.substring(authority.lastIndexOf('@') + 1);
+    if (authority.startsWith('[')) return true; // IPv6 字面量
+    final colon = authority.lastIndexOf(':');
+    final hasPort = colon > 0 && int.tryParse(authority.substring(colon + 1)) != null;
+    final host = hasPort ? authority.substring(0, colon) : authority;
+    return RegExp(r'^\d{1,3}(\.\d{1,3}){3}$').hasMatch(host) ||
+        host == 'localhost' ||
+        host.endsWith('.local');
   }
 
   String get authHeader =>
@@ -180,13 +226,22 @@ class WebDavClient {
             'Content-Type': 'application/xml; charset=utf-8',
             'Depth': '1',
           },
+          // 状态码要自己判（405 是「地址不对」的重要线索），别让 dio 提前抛掉。
+          validateStatus: (status) => status != null && status < 500,
         ),
       );
     } on DioException catch (e) {
       throw WebDavError.from(e);
     }
     final status = res.statusCode ?? 0;
-    if (status != 207 && status != 200) throw WebDavError.fromStatus(status, body: res.data);
+    if (status != 207 && status != 200) {
+      // 漏掉 /dav 时 PROPFIND 会打到 OpenList 的 API 根，被 gin 拒成 405/404/400 ——
+      // 这是地址填错，不是「上级目录不可写」。子目录的 404 仍然按路径不存在报。
+      if (target == '/' && (status == 400 || status == 404 || status == 405)) {
+        throw WebDavError(WebDavErrorKind.notWebDavRoot, statusCode: status, detail: res.data?.toString());
+      }
+      throw WebDavError.fromStatus(status, body: res.data);
+    }
     return parseMultistatus(res.data?.toString() ?? '', basePath: target, hostBase: hostBasePath);
   }
 
@@ -213,7 +268,16 @@ class WebDavClient {
     try {
       doc = XmlDocument.parse(xmlBody);
     } on XmlException {
-      throw WebDavError(WebDavErrorKind.network, detail: 'PROPFIND 响应不是合法 XML');
+      // 200 + 网页而不是 207 XML：几乎一定是打到了站点根，不是 WebDAV 入口。
+      throw WebDavError(WebDavErrorKind.notWebDavRoot, detail: 'PROPFIND 响应不是合法 XML');
+    }
+    // 登录页 / 门户 / OpenList 前端本身都是合法 XML，能一路解析成「空目录」，
+    // 所以必须确认根节点确实是 multistatus 才算数。
+    if (doc.rootElement.name.local.toLowerCase() != 'multistatus') {
+      throw WebDavError(
+        WebDavErrorKind.notWebDavRoot,
+        detail: '响应根节点是 <${doc.rootElement.name.local}>，不是 WebDAV 目录列表',
+      );
     }
     final base = RemotePath.normalize(basePath);
     final out = <RemoteEntry>[];
@@ -352,9 +416,9 @@ class WebDavClient {
       );
       final code = res.statusCode ?? 0;
       if (code == 201 || code == 204 || code == 200 || code == 405) return;
-      throw WebDavError.fromStatus(code, body: res.data);
+      throw WebDavError.forWrite(WebDavError.fromStatus(code, body: res.data));
     } on DioException catch (e) {
-      throw WebDavError.from(e);
+      throw WebDavError.forWrite(WebDavError.from(e));
     }
   }
 
@@ -426,7 +490,7 @@ class WebDavClient {
         ),
       );
     } on DioException catch (e) {
-      throw WebDavError.from(e);
+      throw WebDavError.forWrite(WebDavError.from(e));
     }
   }
 

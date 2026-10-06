@@ -23,6 +23,13 @@ class MockWebDav {
   int? requireAuthStatus;
   bool ignoreRange = false;
 
+  /// 强制 PROPFIND 的状态码 / 响应体，用来模拟「地址漏了 /dav」这类服务器回复。
+  int? propfindStatus;
+  String? propfindBody;
+
+  /// 强制写请求（PUT / MKCOL）的状态码，模拟 OpenList「能读不能写」的账号。
+  int? writeStatus;
+
   HttpServer? _server;
 
   Future<String> start() async {
@@ -56,10 +63,29 @@ class MockWebDav {
     }
 
     final raw = Uri.decodeFull(request.uri.path);
+    final inside = raw == prefix || raw.startsWith('$prefix/');
     final path = raw.startsWith(prefix) ? _norm(raw.substring(prefix.length)) : _norm(raw);
     final method = request.method;
 
     if (method == 'PROPFIND') {
+      if (propfindStatus != null) {
+        res.statusCode = propfindStatus!;
+        await res.close();
+        return;
+      }
+      if (propfindBody != null) {
+        res.statusCode = propfindStatus ?? HttpStatus.ok;
+        res.headers.contentType = ContentType('text', 'html', charset: 'utf-8');
+        res.write(propfindBody!);
+        await res.close();
+        return;
+      }
+      // 没注册到路由时 gin 回 405，OpenList 的站点根（漏了 /dav）就是这个行为。
+      if (!inside) {
+        res.statusCode = HttpStatus.methodNotAllowed;
+        await res.close();
+        return;
+      }
       await _propfind(res, path);
       return;
     }
@@ -102,7 +128,9 @@ class MockWebDav {
       return;
     }
     if (method == 'MKCOL') {
-      if (dirs.contains(path)) {
+      if (writeStatus != null) {
+        res.statusCode = writeStatus!;
+      } else if (dirs.contains(path)) {
         res.statusCode = HttpStatus.methodNotAllowed;
       } else {
         dirs.add(path);
@@ -112,6 +140,12 @@ class MockWebDav {
       return;
     }
     if (method == 'PUT') {
+      if (writeStatus != null) {
+        res.statusCode = writeStatus!;
+        await request.drain<void>();
+        await res.close();
+        return;
+      }
       final bytes = await _readBody(request);
       files[path] = bytes;
       res.statusCode = HttpStatus.created;

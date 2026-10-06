@@ -89,6 +89,54 @@ void main() {
       expect(error.kind, WebDavErrorKind.notFound);
       expect(error.message, isNotEmpty);
     });
+
+    // 真机反馈「各种凭据都登录失败」，实际是地址漏了 /dav：PROPFIND 打到站点根被 gin 拒成 405。
+    test('漏掉 /dav 时报「地址不对」而不是「目录不可写」', () async {
+      final bare = WebDavClient(ConnectionConfig(
+        type: StorageType.webdav,
+        baseUrl: server.baseUrl.replaceFirst(server.prefix, ''),
+        username: server.username,
+        password: server.password,
+      ));
+      addTearDown(bare.close);
+      try {
+        await bare.list('/');
+        fail('应当抛错');
+      } on WebDavError catch (e) {
+        expect(e.kind, WebDavErrorKind.notWebDavRoot);
+        expect(e.message, contains('/dav'));
+      }
+    });
+
+    test('选了 OpenList 就自动补 /dav', () async {
+      final auto = WebDavClient(ConnectionConfig(
+        type: StorageType.openlist,
+        baseUrl: server.baseUrl.replaceFirst(server.prefix, ''),
+        username: server.username,
+        password: server.password,
+      ));
+      addTearDown(auto.close);
+      expect(await auto.list('/'), isNotEmpty);
+    });
+
+    test('站点返回网页也当成地址填错', () async {
+      server.propfindBody = '<html><body>OpenList 前端</body></html>';
+      await expectLater(
+        client.list('/'),
+        throwsA(isA<WebDavError>()
+            .having((e) => e.kind, 'kind', WebDavErrorKind.notWebDavRoot)),
+      );
+    });
+
+    test('429 是 IP 被临时锁定', () async {
+      server.propfindStatus = HttpStatus.tooManyRequests;
+      await expectLater(
+        client.list('/'),
+        throwsA(isA<WebDavError>()
+            .having((e) => e.kind, 'kind', WebDavErrorKind.tooManyAttempts)
+            .having((e) => e.message, 'message', contains('锁'))),
+      );
+    });
   });
 
   group('存在性与建目录', () {
@@ -154,6 +202,23 @@ void main() {
       expect(utf8.decode(await File(tmp).readAsBytes()), 'hello vault');
       await File(tmp).delete();
     });
+
+    test('只读账号写时 403 报 writeDisabled，而不是笼统 forbidden', () async {
+      server.writeStatus = HttpStatus.forbidden;
+      final tmp = File('${Directory.systemTemp.path}/vault-readonly.bin');
+      await tmp.writeAsBytes([1, 2, 3]);
+      await expectLater(
+        client.uploadFile(tmp, '/旅行/nope.bin'),
+        throwsA(isA<WebDavError>().having((e) => e.kind, 'kind', WebDavErrorKind.writeDisabled)),
+      );
+      await expectLater(
+        client.createDirectory('/新目录'),
+        throwsA(isA<WebDavError>().having((e) => e.kind, 'kind', WebDavErrorKind.writeDisabled)),
+      );
+      // 读路径不受影响
+      expect(await client.list('/'), isNotEmpty);
+      await tmp.delete();
+    });
   });
 
   test('normalizeBase 允许省略协议，且 urlFor 拼出 /dav 前缀', () {
@@ -168,5 +233,46 @@ void main() {
     expect(c.hostBasePath, '/dav');
     expect(c.authHeader, 'Basic ${base64Encode(latin1.encode('admin:p'))}');
     c.close();
+  });
+
+  test('省略协议时内网地址走 http，公网域名走 https', () {
+    expect(WebDavClient.normalizeBase('192.168.1.100:5244/dav'), 'http://192.168.1.100:5244/dav');
+    expect(WebDavClient.normalizeBase('localhost:5244/dav'), 'http://localhost:5244/dav');
+    expect(WebDavClient.normalizeBase('nas.local:5244/dav'), 'http://nas.local:5244/dav');
+    expect(WebDavClient.normalizeBase('dav.example.com/dav'), 'https://dav.example.com/dav');
+    expect(WebDavClient.normalizeBase('[::1]:5244/dav'), 'http://[::1]:5244/dav');
+    expect(WebDavClient.normalizeBase('https://192.168.1.100:5244/dav'), 'https://192.168.1.100:5244/dav');
+  });
+
+  test('OpenList 类型把站点根补成 /dav，WebDAV 类型不动', () {
+    expect(
+      WebDavClient.normalizeBase('http://192.168.1.100:5244', StorageType.openlist),
+      'http://192.168.1.100:5244/dav',
+    );
+    expect(
+      WebDavClient.normalizeBase('http://192.168.1.100:5244/', StorageType.openlist),
+      'http://192.168.1.100:5244/dav',
+    );
+    expect(
+      WebDavClient.normalizeBase('http://192.168.1.100:5244/dav', StorageType.openlist),
+      'http://192.168.1.100:5244/dav',
+    );
+    // 自定义前缀（例如反代到 /openlist/dav）不能被覆盖。
+    expect(
+      WebDavClient.normalizeBase('http://192.168.1.100:5244/openlist/dav', StorageType.openlist),
+      'http://192.168.1.100:5244/openlist/dav',
+    );
+    expect(WebDavClient.normalizeBase('http://192.168.1.100:5244'), 'http://192.168.1.100:5244');
+  });
+
+  test('空地址与没有主机的地址报 badConfig', () {
+    for (final bad in ['', '   ', 'http://', 'not a url at all :5244']) {
+      expect(
+        () => WebDavClient.normalizeBase(bad),
+        throwsA(isA<WebDavError>()
+            .having((e) => e.kind, 'kind', WebDavErrorKind.badConfig)),
+        reason: bad,
+      );
+    }
   });
 }

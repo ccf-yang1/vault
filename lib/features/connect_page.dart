@@ -154,7 +154,7 @@ class _ConnectPageState extends ConsumerState<ConnectPage> {
                 icon: 'globe',
                 controller: _url,
                 placeholder: _type == StorageType.openlist
-                    ? 'http://192.168.1.17:5244/dav'
+                    ? 'http://192.168.1.100:5244/dav'
                     : 'https://dav.example.com/dav',
                 keyboardType: TextInputType.url,
                 onSubmitted: (_) => _focusNext(_user),
