@@ -157,12 +157,34 @@ class UploadController extends Notifier<UploadState> {
     unawaited(_loadSizes(assets));
   }
 
-  /// chips：今天全部 / 最近 N 天，都是「追加选择」，不清掉用户手点的。
-  Future<void> selectToday() => selectAll(withinRecentDays(state.assets, 1));
+  /// chips：今天 / 最近 N 天。整组已经全选时再点一次取消整组，否则整组追加，
+  /// 不动用户手动挑的其它项。
+  Future<void> toggleGroup(List<AssetEntity> assets) async {
+    if (assets.isEmpty) return;
+    final ids = assets.map((a) => a.id).toSet();
+    final allOn = ids.every(state.selected.contains);
+    final next = state.selected.toSet();
+    if (allOn) {
+      next.removeAll(ids);
+      state = state.copyWith(selected: next);
+      return;
+    }
+    next.addAll(ids);
+    state = state.copyWith(selected: next);
+    unawaited(_loadSizes(assets));
+  }
+
+  /// 给 chips 用：整组是否已全选，决定按钮要不要高亮。
+  bool isChipActive(int days) {
+    final ids = withinRecentDays(state.assets, days).map((a) => a.id);
+    return ids.isNotEmpty && ids.every(state.selected.contains);
+  }
+
+  Future<void> selectToday() => toggleGroup(withinRecentDays(state.assets, 1));
 
   Future<void> selectRecentDays(int days) async {
     ref.read(settingsProvider.notifier).setRecentDays(days);
-    await selectAll(withinRecentDays(state.assets, days));
+    await toggleGroup(withinRecentDays(state.assets, days));
   }
 
   Future<void> clearSelection() async => state = state.copyWith(selected: const {});

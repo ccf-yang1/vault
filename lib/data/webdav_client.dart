@@ -55,9 +55,18 @@ class WebDavError implements Exception {
         WebDavErrorKind.writeDisabled => '这个账号只能看不能传，请在 OpenList 后台的用户权限里勾上 WebDAV 写入',
         // iOS 从 14 起在系统层拦掉没有「本地网络」权限的局域网直连，报出来只是普通 socket 失败。
         WebDavErrorKind.localNetworkBlocked => 'iPhone 不允许这个 App 访问局域网。请到 设置 → 隐私与安全性 → 本地网络 里打开 Vault，然后彻底关掉 App 再试一次',
-        WebDavErrorKind.server => '服务器错误${statusCode == null ? '' : ' ($statusCode)'}',
-        WebDavErrorKind.network => '无法连接服务器${statusCode == null ? '' : ' (HTTP $statusCode)'}',
+        WebDavErrorKind.server => '服务器返回异常${statusCode == null ? _rawHint : ' (HTTP $statusCode)'}',
+        WebDavErrorKind.network => '无法连接服务器${statusCode == null ? _rawHint : ' (HTTP $statusCode)'}',
       };
+
+  /// 没拿到状态码时（多为 PUT 传输中途被服务器掐断），把系统原始报错的第一行带上，
+  /// 免得所有失败都糊成一句「无法连接服务器」，看不出到底是断连还是被拒。
+  String get _rawHint {
+    final d = (detail ?? '').trim();
+    if (d.isEmpty) return '';
+    final line = d.split('\n').first;
+    return '：${line.length > 140 ? '${line.substring(0, 140)}…' : line}';
+  }
 
   static WebDavError from(DioException e, {bool lanTarget = false}) {
     if (e.type == DioExceptionType.cancel) return WebDavError(WebDavErrorKind.canceled);
@@ -100,6 +109,9 @@ class WebDavError implements Exception {
       429 => WebDavErrorKind.tooManyAttempts,
       507 => WebDavErrorKind.insufficientStorage,
       >= 500 => WebDavErrorKind.server,
+      // 只要拿到了状态码就说明连上了服务器。剩下的 4xx（PUT/HEAD 常见的 400、412 等）
+      // 不能报成「无法连接服务器」，否则一次被拒的上传会把人引去查网络和 Wi-Fi。
+      >= 400 => WebDavErrorKind.server,
       _ => WebDavErrorKind.network,
     };
     return WebDavError(kind, statusCode: code, detail: body?.toString());

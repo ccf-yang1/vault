@@ -188,7 +188,7 @@ class SessionController extends AsyncNotifier<Session?> {
 
   @override
   Future<Session?> build() async {
-    final config = await ref.read(credentialStoreProvider).load();
+    final config = await ref.read(credentialStoreProvider).current();
     if (config == null || config.baseUrl.isEmpty) return null;
     final probe = await _probe(config, false);
     lastAttempt = probe.attempt;
@@ -207,10 +207,10 @@ class SessionController extends AsyncNotifier<Session?> {
     state = const AsyncLoading();
     state = AsyncData(Session(config, client));
     if (config.remember) {
-      await ref.read(credentialStoreProvider).save(config);
-    } else {
-      await ref.read(credentialStoreProvider).clear();
+      // 落到账号表：同 id 覆盖并设为当前，这是多账号切换的地基。
+      await ref.read(credentialStoreProvider).saveAccount(config);
     }
+    ref.invalidate(accountsProvider);
     return ConnectResult.ok(probe.attempt);
   }
 
@@ -223,6 +223,42 @@ class SessionController extends AsyncNotifier<Session?> {
 }
 
 final sessionProvider = AsyncNotifierProvider<SessionController, Session?>(SessionController.new);
+
+/// 本机保存的账号列表（需求：可登录两个账号，并在设置里切换当前用哪个）。
+class AccountsController extends AsyncNotifier<List<ConnectionConfig>> {
+  @override
+  Future<List<ConnectionConfig>> build() => ref.read(credentialStoreProvider).loadAll();
+
+  /// 切到某个已保存账号：直接用 Keychain 里存好的凭据静默重连，不用重打密码。
+  Future<ConnectResult> use(ConnectionConfig config) async {
+    final result =
+        await ref.read(sessionProvider.notifier).connect(config.copyWith(remember: true));
+    if (result.isSuccess) state = AsyncData(await ref.read(credentialStoreProvider).loadAll());
+    return result;
+  }
+
+  /// 删除一个账号；删的若正是当前在用的，自动切到剩下的第一个，全空则退回连接页。
+  Future<void> remove(ConnectionConfig config) async {
+    final store = ref.read(credentialStoreProvider);
+    final active = ref.read(connectionConfigProvider);
+    final isActive = active != null && CredentialStore.idOf(active) == CredentialStore.idOf(config);
+    final all = await store.loadAll();
+    final index = all.indexWhere((e) => CredentialStore.idOf(e) == CredentialStore.idOf(config));
+    if (index < 0) return;
+    await store.removeAt(index);
+    final remaining = await store.loadAll();
+    state = AsyncData(remaining);
+    if (!isActive) return;
+    if (remaining.isEmpty) {
+      await ref.read(sessionProvider.notifier).logout();
+    } else {
+      await use(remaining.first);
+    }
+  }
+}
+
+final accountsProvider =
+    AsyncNotifierProvider<AccountsController, List<ConnectionConfig>>(AccountsController.new);
 
 /// 未登录时抛状态错误；页面都在登录之后才挂载。
 final davProvider = Provider<WebDavClient>((ref) {

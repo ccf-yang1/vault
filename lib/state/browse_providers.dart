@@ -75,15 +75,22 @@ class FolderStat {
 /// 列表行的「128 项 · 2.4 GB」：懒算，失败就显示空，不打断浏览。
 final folderStatProvider = FutureProvider.family.autoDispose<FolderStat, String>((ref, path) async {
   if (!ref.watch(settingsProvider).preloadEnabled) return const FolderStat(0, 0);
+  // 必须 watch 隐藏集合与隐藏模式：藏掉一个目录后首页那行的数字要跟着减，
+  // 否则「N 项」还带着刚藏起来的项，看上去就没生效。隐藏模式下反过来全算。
+  final hidden = ref.watch(hiddenDirsProvider).map((e) => e.path).toSet();
+  final showHidden = ref.watch(hiddenModeProvider);
   final gate = ref.read(folderStatGateProvider);
   try {
     return await gate.run(() async {
       final children = await ref.read(davProvider).list(path);
+      var count = 0;
       var bytes = 0;
       for (final child in children) {
+        if (!showHidden && hidden.contains(child.path)) continue;
+        count++;
         bytes += child.size;
       }
-      return FolderStat(children.length, bytes);
+      return FolderStat(count, bytes);
     });
   } on Object {
     return const FolderStat(0, 0);

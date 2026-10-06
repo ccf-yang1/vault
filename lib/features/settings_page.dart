@@ -6,7 +6,9 @@ import '../core/icons.dart';
 import '../core/models.dart';
 import '../core/theme.dart';
 import '../core/widgets.dart';
+import '../data/credential_store.dart';
 import '../state/session_providers.dart';
+import 'connect_page.dart';
 
 // CI 每次 push 会把 pubspec 的 PATCH +1，这里的展示值可能落后一个小版本。
 const String kAppVersion = '1.0.0';
@@ -31,6 +33,7 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
   String? _saveError;
   bool _prefilled = false;
   int? _cacheBytes;
+  String? _busyAccountId;
 
   @override
   void initState() {
@@ -172,6 +175,8 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
                     ),
                 ],
               ),
+              const SectionTitle('账号'),
+              _accountsCard(),
               const SectionTitle('记录'),
               Padding(
                 padding: const EdgeInsets.symmetric(horizontal: 16),
@@ -267,6 +272,143 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
         ),
       ),
     );
+  }
+
+  /// 已保存的账号列表：当前那个打勾、点别的即切换，每行可移除，末尾「添加账号」。
+  Widget _accountsCard() {
+    return ref.watch(accountsProvider).maybeWhen(
+      data: (list) {
+        final active = ref.watch(connectionConfigProvider);
+        final activeId = active == null ? null : CredentialStore.idOf(active);
+        return VaultCard(
+          padding: const EdgeInsets.fromLTRB(15, 2, 15, 2),
+          children: [
+            for (final a in list) _accountRow(a, activeId == CredentialStore.idOf(a)),
+            _addAccountRow(),
+          ],
+        );
+      },
+      orElse: () => const SizedBox(height: 18),
+    );
+  }
+
+  Widget _accountRow(ConnectionConfig a, bool isActive) {
+    final busy = _busyAccountId == CredentialStore.idOf(a);
+    return GestureDetector(
+      behavior: HitTestBehavior.opaque,
+      onTap: (isActive || busy) ? null : () => _switchAccount(a),
+      child: Padding(
+        padding: const EdgeInsets.symmetric(vertical: 12),
+        child: Row(
+          children: [
+            VIcon(isActive ? 'check' : 'user', size: 16, color: isActive ? VaultColors.accent : VaultColors.dim),
+            const SizedBox(width: 11),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    a.username.isEmpty ? a.displayHost : a.username,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: TextStyle(
+                      fontSize: 13,
+                      fontWeight: isActive ? FontWeight.w600 : FontWeight.w400,
+                      color: isActive ? VaultColors.text : const Color(0xFFD6D9DE),
+                    ),
+                  ),
+                  const SizedBox(height: 2),
+                  Text(
+                    a.displayHost,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: const TextStyle(fontSize: 11, color: VaultColors.dim),
+                  ),
+                ],
+              ),
+            ),
+            if (busy)
+              const SizedBox(
+                width: 15,
+                height: 15,
+                child: CircularProgressIndicator(strokeWidth: 2, color: VaultColors.accent),
+              )
+            else
+              GestureDetector(
+                behavior: HitTestBehavior.opaque,
+                onTap: () => _removeAccount(a),
+                child: const Padding(
+                  padding: EdgeInsets.only(left: 8),
+                  child: VIcon('close', size: 15, color: Color(0xFF5A6068)),
+                ),
+              ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _addAccountRow() {
+    return GestureDetector(
+      behavior: HitTestBehavior.opaque,
+      onTap: () => Navigator.of(context).push(
+        MaterialPageRoute(builder: (_) => const ConnectPage(addMode: true)),
+      ),
+      child: const Padding(
+        padding: EdgeInsets.symmetric(vertical: 12),
+        child: Row(
+          children: [
+            VIcon('plus', size: 16, color: VaultColors.accent),
+            SizedBox(width: 11),
+            Text('添加账号', style: TextStyle(fontSize: 13, color: VaultColors.accent)),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Future<void> _switchAccount(ConnectionConfig a) async {
+    final old = ref.read(connectionConfigProvider);
+    setState(() => _busyAccountId = CredentialStore.idOf(a));
+    final result = await ref.read(accountsProvider.notifier).use(a);
+    if (!mounted) return;
+    setState(() => _busyAccountId = null);
+    if (!result.isSuccess) {
+      showVaultToast(context, result.message, error: true);
+      return;
+    }
+    // 换到另一台服务器，旧沙盒缓存基本对不上了，清掉更干净（需求 §3.7）。
+    if (old != null && old.baseUrl != a.baseUrl) {
+      await ref.read(cacheProvider).clear();
+      await _refreshCacheSize();
+    }
+  }
+
+  Future<void> _removeAccount(ConnectionConfig a) async {
+    final label = a.username.isEmpty ? a.displayHost : '${a.username}@${a.displayHost}';
+    final ok = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        backgroundColor: VaultColors.surface,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+        title: const Text('移除账号', style: TextStyle(fontSize: 16, color: VaultColors.text)),
+        content: Text(
+          '把 $label 从本机移除？只影响这台设备上的登录信息，不会删服务器上的文件。',
+          style: const TextStyle(fontSize: 13, color: VaultColors.muted, height: 1.6),
+        ),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('取消')),
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, true),
+            child: const Text('移除', style: TextStyle(color: Color(0xFFE0736A))),
+          ),
+        ],
+      ),
+    );
+    if (ok != true) return;
+    await ref.read(accountsProvider.notifier).remove(a);
+    if (!mounted) return;
+    showVaultToast(context, '已移除 $label');
   }
 
   Widget _segment() {

@@ -7,9 +7,14 @@ import '../core/theme.dart';
 import '../core/widgets.dart';
 import '../state/session_providers.dart';
 
-/// HTML 01：连接页。分段控件 + 三个输入框 + 记住凭据 + 安全提示。
+/// HTML 01：连接页。分段控件 + 三个输入框 + 记住凭据。
+///
+/// [addMode] 为真时是从设置里「添加账号」推进来的：不回填旧输入，
+/// 连上后自己弹回设置页（router 的 redirect 管不到 Navigator.push 的栈）。
 class ConnectPage extends ConsumerStatefulWidget {
-  const ConnectPage({super.key});
+  const ConnectPage({super.key, this.addMode = false});
+
+  final bool addMode;
 
   @override
   ConsumerState<ConnectPage> createState() => _ConnectPageState();
@@ -40,8 +45,13 @@ class _ConnectPageState extends ConsumerState<ConnectPage> {
 
   /// 草稿优先、其次 Keychain：用户输入过的东西一直在，自动登录失败也能原样摊回来。
   Future<void> _restore() async {
+    // 「添加账号」进来时保持空表单：别把当前账号的草稿又灌回去。
+    if (widget.addMode) {
+      _draftLoaded = true;
+      return;
+    }
     final draft = ref.read(prefsProvider).loadDraft();
-    final saved = await ref.read(credentialStoreProvider).load();
+    final saved = await ref.read(credentialStoreProvider).current();
     if (!mounted) return;
     final source = draft ?? saved;
     if (source != null) {
@@ -76,23 +86,6 @@ class _ConnectPageState extends ConsumerState<ConnectPage> {
   void _saveDraft() {
     if (!_draftLoaded) return;
     ref.read(prefsProvider).saveDraft(_draft());
-  }
-
-  /// 清空某一行：框里的字由输入框自己清了，这里负责把 Keychain 那格也抹掉，
-  /// 整张表单都空了就整条删——否则下次打开旧凭据又会冒回来。
-  Future<void> _clearSaved({required bool url, required bool user, required bool pass}) async {
-    final saved = await ref.read(credentialStoreProvider).load();
-    if (saved == null) return;
-    final next = _draft();
-    if (next.baseUrl.isEmpty && next.username.isEmpty && next.password.isEmpty) {
-      await ref.read(credentialStoreProvider).clear();
-    } else {
-      await ref.read(credentialStoreProvider).save(saved.copyWith(
-        baseUrl: url ? '' : null,
-        username: user ? '' : null,
-        password: pass ? '' : null,
-      ));
-    }
   }
 
   @override
@@ -131,6 +124,11 @@ class _ConnectPageState extends ConsumerState<ConnectPage> {
     if (result.isSuccess) {
       // 成功即转正式凭据（Keychain），草稿使命完成，免得下次还带着一堆中间输入。
       await ref.read(prefsProvider).clearDraft();
+      if (!mounted) return;
+      if (widget.addMode) {
+        Navigator.of(context).pop(); // 添加账号：连上就弹回设置页
+        return;
+      }
       setState(() => _busy = false);
       return; // redirect 会把我们换成主框架
     }
@@ -217,7 +215,6 @@ class _ConnectPageState extends ConsumerState<ConnectPage> {
                 keyboardType: TextInputType.url,
                 onSubmitted: (_) => _focusNext(_user),
                 showClear: true,
-                onCleared: () => _clearSaved(url: true, user: false, pass: false),
               ),
               VaultTextField(
                 label: '用户名',
@@ -228,7 +225,6 @@ class _ConnectPageState extends ConsumerState<ConnectPage> {
                 textInputAction: TextInputAction.next,
                 onSubmitted: (_) => _focusNext(_pass),
                 showClear: true,
-                onCleared: () => _clearSaved(url: false, user: true, pass: false),
               ),
               VaultTextField(
                 label: '密码',
@@ -237,13 +233,12 @@ class _ConnectPageState extends ConsumerState<ConnectPage> {
                 obscure: _obscure,
                 placeholder: '••••••••',
                 showClear: true,
-                onCleared: () => _clearSaved(url: false, user: false, pass: true),
               ),
               _passwordToggle(),
               const SizedBox(height: 8),
               ToggleRow(
                 title: '在此设备记住凭据',
-                subtitle: '下次打开自动登录',
+                subtitle: '保存到本机，可在设置里切换账号',
                 value: _remember,
                 onChanged: (v) => setState(() {
                   _remember = v;

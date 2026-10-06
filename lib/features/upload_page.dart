@@ -146,7 +146,9 @@ class _UploadPageState extends ConsumerState<UploadPage> {
   }
 
   Widget _chips(UploadState state) {
-    Widget chip(String label, VoidCallback onTap) {
+    final controller = ref.read(uploadProvider.notifier);
+    // active 时整组已全选，再点一次就是取消——所以选中态要高亮出来，不然用户不知道点了没。
+    Widget chip(String label, VoidCallback onTap, {bool active = false}) {
       return Padding(
         padding: const EdgeInsets.only(right: 7),
         child: GestureDetector(
@@ -155,36 +157,38 @@ class _UploadPageState extends ConsumerState<UploadPage> {
           child: Container(
             padding: const EdgeInsets.symmetric(horizontal: 13, vertical: 7),
             decoration: BoxDecoration(
-              color: VaultColors.field,
+              color: active ? VaultColors.accent.withValues(alpha: 0.16) : VaultColors.field,
               borderRadius: BorderRadius.circular(20),
-              border: Border.all(color: VaultColors.line),
+              border: Border.all(color: active ? VaultColors.accent : VaultColors.line),
             ),
-            child: Text(label, style: const TextStyle(fontSize: 12, color: VaultColors.muted)),
+            child: Text(
+              label,
+              style: TextStyle(
+                fontSize: 12,
+                color: active ? VaultColors.accentText : VaultColors.muted,
+              ),
+            ),
           ),
         ),
       );
     }
 
-    return SizedBox(
-      height: 34,
-      child: ListView(
-        scrollDirection: Axis.horizontal,
-        padding: const EdgeInsets.fromLTRB(16, 0, 16, 14),
-        children: [
-          chip('今天全部', () {
-            ref.read(uploadProvider.notifier).selectToday();
-          }),
-          chip('最近 2 天', () {
-            ref.read(uploadProvider.notifier).selectRecentDays(2);
-          }),
-          chip('最近 3 天', () {
-            ref.read(uploadProvider.notifier).selectRecentDays(3);
-          }),
-          chip('自定义', _customDays),
-          chip('清空选择', () {
-            ref.read(uploadProvider.notifier).clearSelection();
-          }),
-        ],
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 12),
+      child: SizedBox(
+        height: 40,
+        child: ListView(
+          scrollDirection: Axis.horizontal,
+          // 只在左右留边：竖向内边距会挤掉交叉轴高度，把 chip 文字裁没（上下 padding 各 7 + 文字）。
+          padding: const EdgeInsets.symmetric(horizontal: 16),
+          children: [
+            chip('今天全部', controller.selectToday, active: controller.isChipActive(1)),
+            chip('最近 2 天', () => controller.selectRecentDays(2), active: controller.isChipActive(2)),
+            chip('最近 3 天', () => controller.selectRecentDays(3), active: controller.isChipActive(3)),
+            chip('自定义', _customDays),
+            chip('清空选择', controller.clearSelection),
+          ],
+        ),
       ),
     );
   }

@@ -10,6 +10,7 @@ import '../core/icons.dart';
 import '../core/models.dart';
 import '../core/theme.dart';
 import '../core/widgets.dart';
+import '../state/browse_providers.dart';
 import '../state/session_providers.dart';
 
 /// HTML 04（旧版）：视频播放器。
@@ -53,35 +54,55 @@ class _VideoPageState extends ConsumerState<VideoPage> {
   }
 
   Future<void> _open() async {
+    final local = widget.localFile;
+    // 远程视频先整段下到沙盒再本地播：OpenList 代理云盘时 Range 支持不稳，
+    // 依赖 Range 的流式常常开不了头或拖不动；普通 GET 下载反而是稳的。
+    // 下不动（文件太大 / 沙盒写不进）再退回本地代理边播边取。
     try {
-      final local = widget.localFile;
-      final controller = local == null
-          ? VideoPlayerController.networkUrl(
-              await ref.read(proxyProvider).urlFor(widget.entry.path),
+      final controller = local != null
+          ? VideoPlayerController.file(
+              local,
               videoPlayerOptions: VideoPlayerOptions(mixWithOthers: false),
             )
           : VideoPlayerController.file(
-              local,
+              await ref.read(cachedFileProvider(cacheKeyFor(widget.entry)).future),
               videoPlayerOptions: VideoPlayerOptions(mixWithOthers: false),
             );
       await controller.initialize();
-      controller.addListener(_onTick);
-      if (!mounted) {
-        unawaited(controller.dispose());
-        return;
-      }
-      setState(() {
-        _controller = controller;
-        _loading = false;
-      });
-      _scheduleHide();
+      _adopt(controller);
     } on Object {
+      if (local == null && mounted) {
+        try {
+          final controller = VideoPlayerController.networkUrl(
+            await ref.read(proxyProvider).urlFor(widget.entry.path),
+            videoPlayerOptions: VideoPlayerOptions(mixWithOthers: false),
+          );
+          await controller.initialize();
+          _adopt(controller);
+          return;
+        } on Object {
+          // 代理也放不出来，落到下面的错误态。
+        }
+      }
       if (!mounted) return;
       setState(() {
         _loading = false;
         _error = _friendly(widget.entry.extension);
       });
     }
+  }
+
+  void _adopt(VideoPlayerController controller) {
+    controller.addListener(_onTick);
+    if (!mounted) {
+      unawaited(controller.dispose());
+      return;
+    }
+    setState(() {
+      _controller = controller;
+      _loading = false;
+    });
+    _scheduleHide();
   }
 
   static String _friendly(String ext) => switch (ext) {
@@ -176,7 +197,7 @@ class _VideoPageState extends ConsumerState<VideoPage> {
                 title: widget.entry.name,
                 subtitle: [
                   widget.entry.size > 0 ? formatBytes(widget.entry.size) : null,
-                  _loading ? '连接中' : (widget.localFile == null ? '边播边预取' : '已解压后播放'),
+                  _loading ? '连接中' : (widget.localFile == null ? '缓冲后播放' : '已解压后播放'),
                 ].whereType<String>().join(' · '),
               ),
               Expanded(
@@ -207,7 +228,7 @@ class _VideoPageState extends ConsumerState<VideoPage> {
             child: CircularProgressIndicator(strokeWidth: 2.2, color: VaultColors.accent),
           ),
           SizedBox(height: 16),
-          Text('正在建立带认证的播放通道…', style: TextStyle(fontSize: 12.5, color: VaultColors.muted)),
+          Text('正在缓冲视频…', style: TextStyle(fontSize: 12.5, color: VaultColors.muted)),
         ],
       );
     }
