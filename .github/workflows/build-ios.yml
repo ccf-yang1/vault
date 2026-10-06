@@ -1,0 +1,167 @@
+name: Build iOS IPA
+
+# push 到 main 自动出未签名 IPA + artifact；手动触发同样只构建不发布。
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: build-ios-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build-ios:
+    runs-on: macos-15
+    timeout-minutes: 90
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          cache: true
+
+      - name: Flutter version
+        run: flutter --version
+
+      # Podfile / 部署目标的处理基于 CocoaPods，关掉 SwiftPM 更稳。
+      - name: Use CocoaPods (disable SwiftPM)
+        run: flutter config --no-enable-swift-package-manager || true
+
+      # 仓库只有 lib / test / pubspec，ios/ 目录在 CI 里现生成。
+      - name: Generate iOS project
+        run: flutter create --platforms=ios --org com.valo2 --project-name vault .
+
+      - name: Remove generated widget test
+        run: rm -f test/widget_test.dart
+
+      - name: Ensure iOS deployment target >= 13.0
+        run: |
+          python3 - <<'PY'
+          import os, re, glob
+
+          MIN = 13.0
+
+          pod = 'ios/Podfile'
+          if os.path.exists(pod):
+              s = open(pod).read()
+              m = re.search(r"^\s*platform :ios,\s*'([0-9.]+)'", s, re.M)
+              if m and float(m.group(1)) < MIN:
+                  s = re.sub(r"^\s*platform :ios,\s*'[0-9.]+'",
+                             "platform :ios, '13.0'", s, flags=re.M)
+                  open(pod, 'w').write(s)
+          else:
+              print('Podfile not found, rely on Xcode deployment target')
+
+          def bump(m):
+              cur = float(m.group(1))
+              return 'IPHONEOS_DEPLOYMENT_TARGET = %.1f;' % max(cur, MIN)
+
+          for p in glob.glob('ios/Runner.xcodeproj/project.pbxproj'):
+              s = open(p).read()
+              s = re.sub(r'IPHONEOS_DEPLOYMENT_TARGET = ([0-9.]+);', bump, s)
+              open(p, 'w').write(s)
+          PY
+          /usr/libexec/PlistBuddy -c "Print :MinimumOSVersion" ios/Flutter/AppFrameworkInfo.plist || true
+
+      # 需求 §3.3：缓存只留 App 沙盒，不进系统相册、也不通过「文件」App 暴露，
+      # 所以只申请相册「读取」权限，且显式关掉文件共享。
+      - name: Patch Info.plist
+        run: |
+          PLIST=ios/Runner/Info.plist
+          /usr/libexec/PlistBuddy -c "Add :NSAppTransportSecurity dict" "$PLIST" 2>/dev/null || true
+          /usr/libexec/PlistBuddy -c "Add :NSAppTransportSecurity:NSAllowsArbitraryLoads bool true" "$PLIST" 2>/dev/null || true
+          /usr/libexec/PlistBuddy -c "Set :NSAppTransportSecurity:NSAllowsArbitraryLoads true" "$PLIST" 2>/dev/null || true
+          /usr/libexec/PlistBuddy -c "Set :CFBundleDisplayName Vault" "$PLIST" 2>/dev/null || true
+          /usr/libexec/PlistBuddy -c "Add :NSPhotoLibraryUsageDescription string 用于把相册照片上传到你的 WebDAV，App 不会写入系统相册。" "$PLIST" 2>/dev/null || true
+          /usr/libexec/PlistBuddy -c "Set :NSPhotoLibraryUsageDescription 用于把相册照片上传到你的 WebDAV，App 不会写入系统相册。" "$PLIST" 2>/dev/null || true
+          /usr/libexec/PlistBuddy -c "Add :UIFileSharingEnabled bool false" "$PLIST" 2>/dev/null || true
+          /usr/libexec/PlistBuddy -c "Set :UIFileSharingEnabled false" "$PLIST" 2>/dev/null || true
+          /usr/libexec/PlistBuddy -c "Add :LSSupportsOpeningDocumentsInPlace bool false" "$PLIST" 2>/dev/null || true
+          /usr/libexec/PlistBuddy -c "Set :LSSupportsOpeningDocumentsInPlace false" "$PLIST" 2>/dev/null || true
+          /usr/libexec/PlistBuddy -c "Print :NSPhotoLibraryUsageDescription" "$PLIST"
+          /usr/libexec/PlistBuddy -c "Delete :NSPhotoLibraryAddUsageDescription" "$PLIST" 2>/dev/null || true
+          /usr/libexec/PlistBuddy -c "Print :NSAppTransportSecurity" "$PLIST" || true
+
+      - name: Flutter pub get
+        run: flutter pub get
+
+      - name: Analyze Dart (errors only)
+        run: flutter analyze --no-fatal-infos --no-fatal-warnings
+
+      - name: Run tests
+        run: flutter test
+
+      # 只生成 Flutter/Xcode 配置，绕开 Flutter 自己的签名校验。
+      - name: Prepare Flutter iOS config
+        run: flutter build ios --release --config-only --no-codesign
+
+      - name: CocoaPods install
+        run: |
+          cd ios
+          pod install
+
+      - name: Xcode build (unsigned)
+        run: |
+          set -e
+          xcodebuild \
+            -workspace ios/Runner.xcworkspace \
+            -scheme Runner \
+            -configuration Release \
+            -sdk iphoneos \
+            -destination 'generic/platform=iOS' \
+            -derivedDataPath build/ios \
+            CODE_SIGN_STYLE=Manual \
+            DEVELOPMENT_TEAM="" \
+            PROVISIONING_PROFILE_SPECIFIER="" \
+            CODE_SIGN_IDENTITY="" \
+            CODE_SIGNING_REQUIRED=NO \
+            CODE_SIGNING_ALLOWED=NO \
+            build
+
+      - name: Read version from pubspec
+        id: ver
+        run: |
+          V=$(grep -m1 '^version:' pubspec.yaml | sed 's/^version:[[:space:]]*//' | tr -d '\r')
+          IPA="vault_$(echo "$V" | tr '+' '_').ipa"
+          echo "version=$V" >> "$GITHUB_OUTPUT"
+          echo "ipa=$IPA" >> "$GITHUB_OUTPUT"
+          echo "V=$V  IPA=$IPA"
+
+      - name: Package unsigned IPA
+        run: |
+          set -e
+          APP_PATH=$(find build/ios -type d -name Runner.app | head -1)
+          echo "APP_PATH=$APP_PATH"
+          test -n "$APP_PATH"
+          test -d "$APP_PATH"
+          rm -rf Payload
+          mkdir -p Payload
+          cp -R "$APP_PATH" Payload/
+          IPA_NAME="${{ steps.ver.outputs.ipa }}"
+          zip -qr "$IPA_NAME" Payload
+          ls -lh "$IPA_NAME"
+
+      - name: Upload IPA
+        uses: actions/upload-artifact@v4
+        with:
+          name: vault-ipa
+          path: ${{ steps.ver.outputs.ipa }}
+          if-no-files-found: error
+
+      - name: Upload build logs on failure
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: ios-build-logs
+          path: |
+            build/ios/**/*.log
+            ios/Flutter/*.xcconfig
+          if-no-files-found: ignore

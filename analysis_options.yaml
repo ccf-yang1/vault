@@ -1,0 +1,12 @@
+include: package:flutter_lints/flutter.yaml
+
+analyzer:
+  errors:
+    avoid_print: warning
+  exclude:
+    - build/**
+
+linter:
+  rules:
+    - prefer_single_quotes
+    - unawaited_futures

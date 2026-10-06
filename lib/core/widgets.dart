@@ -1,0 +1,546 @@
+import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
+
+import 'icons.dart';
+import 'theme.dart';
+
+/// 设置页卡片：`margin:0 16 / background #15171B / border line / radius 14`。
+class VaultCard extends StatelessWidget {
+  const VaultCard({
+    required this.children,
+    this.padding = EdgeInsets.zero,
+    this.margin = const EdgeInsets.symmetric(horizontal: 16),
+    this.borderColor = VaultColors.line,
+    this.background = VaultColors.field,
+    super.key,
+  });
+
+  final List<Widget> children;
+  final EdgeInsetsGeometry padding;
+  final EdgeInsetsGeometry margin;
+  final Color borderColor;
+  final Color background;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      margin: margin,
+      padding: padding,
+      decoration: BoxDecoration(
+        color: background,
+        borderRadius: BorderRadius.circular(VaultRadius.card),
+        border: Border.all(color: borderColor),
+      ),
+      child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: children),
+    );
+  }
+}
+
+class SectionTitle extends StatelessWidget {
+  const SectionTitle(this.text, {super.key});
+
+  final String text;
+
+  @override
+  Widget build(BuildContext context) => Padding(
+        padding: const EdgeInsets.fromLTRB(22, 14, 22, 8),
+        child: Text(
+          text,
+          style: const TextStyle(
+            fontSize: 11.5,
+            color: VaultColors.dim,
+            letterSpacing: 0.7,
+            fontWeight: FontWeight.w500,
+          ),
+        ),
+      );
+}
+
+/// 36x36 的图标按钮，对应 `.icon-btn`。
+class IconBtn extends StatelessWidget {
+  const IconBtn({
+    required this.icon,
+    this.onTap,
+    this.color = VaultColors.muted,
+    this.size = 19,
+    this.tooltip,
+    super.key,
+  });
+
+  final String icon;
+  final VoidCallback? onTap;
+  final Color color;
+  final double size;
+  final String? tooltip;
+
+  @override
+  Widget build(BuildContext context) {
+    final button = GestureDetector(
+      behavior: HitTestBehavior.opaque,
+      onTap: onTap,
+      child: SizedBox(
+        width: 36,
+        height: 36,
+        child: Center(child: VIcon(icon, size: size, color: color)),
+      ),
+    );
+    return tooltip == null ? button : Tooltip(message: tooltip!, child: button);
+  }
+}
+
+/// `.btn-primary`：180° 渐变 + 主色投影。
+class PrimaryButton extends StatelessWidget {
+  const PrimaryButton({
+    required this.label,
+    this.onPressed,
+    this.loading = false,
+    this.compact = false,
+    this.color,
+    super.key,
+  });
+
+  final String label;
+  final VoidCallback? onPressed;
+  final bool loading;
+  final bool compact;
+  final Color? color;
+
+  @override
+  Widget build(BuildContext context) {
+    final enabled = onPressed != null && !loading;
+    return Opacity(
+      opacity: enabled ? 1 : 0.55,
+      child: DecoratedBox(
+        decoration: BoxDecoration(
+          borderRadius: BorderRadius.circular(compact ? 12 : VaultRadius.button),
+          gradient: LinearGradient(
+            begin: Alignment.topCenter,
+            end: Alignment.bottomCenter,
+            colors: [color ?? VaultColors.accent, (color == null ? VaultColors.accentEnd : color!.withValues(alpha: 0.82))],
+          ),
+          boxShadow: [
+            BoxShadow(
+              color: (color ?? VaultColors.accent).withValues(alpha: 0.5),
+              blurRadius: 26,
+              offset: const Offset(0, 12),
+            ),
+          ],
+        ),
+        child: Material(
+          color: Colors.transparent,
+          child: InkWell(
+            borderRadius: BorderRadius.circular(compact ? 12 : VaultRadius.button),
+            onTap: enabled ? onPressed : null,
+            child: Container(
+              height: compact ? 40 : 50,
+              padding: EdgeInsets.symmetric(horizontal: compact ? 26 : 16),
+              alignment: Alignment.center,
+              child: loading
+                  ? const SizedBox(
+                      width: 18,
+                      height: 18,
+                      child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
+                    )
+                  : Text(
+                      label,
+                      style: TextStyle(
+                        fontSize: compact ? 14 : 15,
+                        fontWeight: FontWeight.w600,
+                        color: Colors.white,
+                        letterSpacing: 0.4,
+                      ),
+                    ),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class GhostButton extends StatelessWidget {
+  const GhostButton({required this.label, this.onPressed, this.color = const Color(0xFF9AA0A8), super.key});
+
+  final String label;
+  final VoidCallback? onPressed;
+  final Color color;
+
+  @override
+  Widget build(BuildContext context) {
+    return GestureDetector(
+      behavior: HitTestBehavior.opaque,
+      onTap: onPressed,
+      child: Container(
+        height: 42,
+        alignment: Alignment.center,
+        decoration: BoxDecoration(
+          borderRadius: BorderRadius.circular(12),
+          border: Border.all(color: VaultColors.line2),
+        ),
+        child: Text(label, style: TextStyle(fontSize: 13.5, color: color)),
+      ),
+    );
+  }
+}
+
+/// 连接页 / 设置页的输入框，对应 `.field`。
+class VaultTextField extends StatelessWidget {
+  const VaultTextField({
+    required this.label,
+    required this.icon,
+    required this.controller,
+    this.obscure = false,
+    this.placeholder,
+    this.keyboardType,
+    this.textInputAction,
+    this.autofillHints,
+    this.onSubmitted,
+    this.enabled = true,
+    super.key,
+  });
+
+  final String label;
+  final String icon;
+  final TextEditingController controller;
+  final bool obscure;
+  final String? placeholder;
+  final TextInputType? keyboardType;
+  final TextInputAction? textInputAction;
+  final List<String>? autofillHints;
+  final ValueChanged<String>? onSubmitted;
+  final bool enabled;
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Padding(
+          padding: const EdgeInsets.only(left: 2, bottom: 7),
+          child: Text(
+            label,
+            style: const TextStyle(fontSize: 11.5, color: VaultColors.dim, letterSpacing: 0.25),
+          ),
+        ),
+        Container(
+          height: 46,
+          padding: const EdgeInsets.symmetric(horizontal: 13),
+          decoration: BoxDecoration(
+            color: VaultColors.field,
+            borderRadius: BorderRadius.circular(VaultRadius.field),
+            border: Border.all(color: VaultColors.line),
+          ),
+          child: Row(
+            children: [
+              VIcon(icon, size: 15, color: VaultColors.dim),
+              const SizedBox(width: 10),
+              Expanded(
+                child: TextField(
+                  controller: controller,
+                  obscureText: obscure,
+                  enabled: enabled,
+                  keyboardType: keyboardType,
+                  autofillHints: autofillHints,
+                  textInputAction: textInputAction ?? (onSubmitted == null ? TextInputAction.done : TextInputAction.next),
+                  onSubmitted: onSubmitted,
+                  style: const TextStyle(fontSize: 13.5, color: Color(0xFFD6D9DE)),
+                  decoration: InputDecoration(
+                    isDense: true,
+                    border: InputBorder.none,
+                    contentPadding: EdgeInsets.zero,
+                    hintText: placeholder,
+                    hintStyle: const TextStyle(fontSize: 13.5, color: Color(0xFF4A5058)),
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ),
+        const SizedBox(height: 15),
+      ],
+    );
+  }
+}
+
+/// 连接页的开关行（带边框卡片），对应 `.toggle-row`。
+class ToggleRow extends StatelessWidget {
+  const ToggleRow({
+    required this.title,
+    required this.subtitle,
+    required this.value,
+    required this.onChanged,
+    super.key,
+  });
+
+  final String title;
+  final String subtitle;
+  final bool value;
+  final ValueChanged<bool> onChanged;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 13, vertical: 12),
+      decoration: BoxDecoration(
+        color: VaultColors.field,
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: VaultColors.line),
+      ),
+      child: Row(
+        children: [
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(title, style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w500, color: Color(0xFFD6D9DE))),
+                const SizedBox(height: 3),
+                Text(subtitle, style: const TextStyle(fontSize: 11, color: VaultColors.dim, height: 1.5)),
+              ],
+            ),
+          ),
+          VaultSwitch(value: value, onChanged: onChanged),
+        ],
+      ),
+    );
+  }
+}
+
+/// 40x24 的 iOS 风格开关，配色取自 ui.html 的 `.switch`。
+class VaultSwitch extends StatelessWidget {
+  const VaultSwitch({required this.value, required this.onChanged, super.key});
+
+  final bool value;
+  final ValueChanged<bool>? onChanged;
+
+  @override
+  Widget build(BuildContext context) {
+    return GestureDetector(
+      behavior: HitTestBehavior.opaque,
+      onTap: onChanged == null ? null : () => onChanged!(!value),
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 180),
+        width: 40,
+        height: 24,
+        decoration: BoxDecoration(
+          color: value ? const Color(0x805E7CE2) : Colors.white.withValues(alpha: 0.10),
+          borderRadius: BorderRadius.circular(12),
+        ),
+        child: AnimatedAlign(
+          duration: const Duration(milliseconds: 180),
+          alignment: value ? Alignment.centerRight : Alignment.centerLeft,
+          child: Padding(
+            padding: const EdgeInsets.all(2.5),
+            child: Container(
+              width: 19,
+              height: 19,
+              decoration: BoxDecoration(
+                color: value ? Colors.white : const Color(0xFF7C838C),
+                shape: BoxShape.circle,
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+/// `.hm-badge`：隐藏模式的小徽章。
+class HmBadge extends StatelessWidget {
+  const HmBadge({required this.text, this.icon = 'dot', this.dense = false, super.key});
+
+  final String text;
+  final String icon;
+  final bool dense;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: EdgeInsets.symmetric(horizontal: dense ? 6 : 7, vertical: 3),
+      decoration: BoxDecoration(
+        color: VaultColors.purple.withValues(alpha: 0.08),
+        borderRadius: BorderRadius.circular(6),
+        border: Border.all(color: VaultColors.purple.withValues(alpha: 0.3)),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          VIcon(icon, size: dense ? 9 : 10, color: VaultColors.purpleSoft),
+          const SizedBox(width: 4),
+          Text(
+            text,
+            style: TextStyle(fontSize: dense ? 9 : 9.5, color: VaultColors.purpleSoft, letterSpacing: 0.4),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+/// 底部三 Tab：高度 72，其中底部 18 留给 home 指示条。
+class VaultBottomBar extends StatelessWidget {
+  const VaultBottomBar({required this.index, required this.onSelect, super.key});
+
+  final int index;
+  final ValueChanged<int> onSelect;
+
+  static const _items = [
+    (label: '浏览', activeIcon: 'folder', idleIcon: 'folderLine'),
+    (label: '上传', activeIcon: 'upload', idleIcon: 'upload'),
+    (label: '设置', activeIcon: 'gear', idleIcon: 'gear'),
+  ];
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      height: 72,
+      decoration: const BoxDecoration(
+        color: Color(0xF0121417),
+        border: Border(top: BorderSide(color: VaultColors.line)),
+      ),
+      child: SafeArea(
+        top: false,
+        child: Padding(
+          padding: const EdgeInsets.only(bottom: 18),
+          child: Row(
+            children: [
+              for (var i = 0; i < _items.length; i++)
+                Expanded(
+                  child: GestureDetector(
+                    behavior: HitTestBehavior.opaque,
+                    onTap: () {
+                      HapticFeedback.selectionClick();
+                      onSelect(i);
+                    },
+                    child: Column(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        VIcon(
+                          i == index ? _items[i].activeIcon : _items[i].idleIcon,
+                          size: 21,
+                          color: i == index ? VaultColors.accent : VaultColors.dim,
+                        ),
+                        const SizedBox(height: 4),
+                        Text(
+                          _items[i].label,
+                          style: TextStyle(
+                            fontSize: 10,
+                            letterSpacing: 0.3,
+                            color: i == index ? VaultColors.accent : VaultColors.dim,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+/// 统一的浅色 snackbar，用来报「人话」错误。
+void showVaultToast(BuildContext context, String message, {bool error = false}) {
+  ScaffoldMessenger.of(context)
+    ..clearSnackBars()
+    ..showSnackBar(
+      SnackBar(
+        backgroundColor: error ? const Color(0xFF2A1E21) : VaultColors.surface2,
+        duration: Duration(milliseconds: error ? 3200 : 2000),
+        behavior: SnackBarBehavior.floating,
+        margin: const EdgeInsets.fromLTRB(16, 0, 16, 96),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+        content: Row(
+          children: [
+            VIcon(error ? 'shield' : 'check', size: 15, color: error ? const Color(0xFFE0736A) : VaultColors.green),
+            const SizedBox(width: 9),
+            Expanded(
+              child: Text(
+                message,
+                style: TextStyle(fontSize: 12.5, color: error ? const Color(0xFFF0C6C2) : VaultColors.text, height: 1.45),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+}
+
+/// 顶部标题栏，`.appbar`：高 52。
+class VaultAppBar extends StatelessWidget implements PreferredSizeWidget {
+  const VaultAppBar({
+    required this.title,
+    this.actions = const [],
+    this.leading,
+    this.subtitle,
+    super.key,
+  });
+
+  final String title;
+  final List<Widget> actions;
+  final Widget? leading;
+  final String? subtitle;
+
+  @override
+  Size get preferredSize => const Size.fromHeight(52);
+
+  @override
+  Widget build(BuildContext context) {
+    return SizedBox(
+      height: 52,
+      child: Row(
+        children: [
+          if (leading != null)
+            Padding(padding: const EdgeInsets.only(left: 4), child: leading)
+          else
+            const SizedBox(width: 18),
+          Expanded(
+            child: Column(
+              mainAxisAlignment: MainAxisAlignment.center,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(title, style: const TextStyle(fontSize: 17, fontWeight: FontWeight.w600, color: Color(0xFFEDEEF0))),
+                if (subtitle != null)
+                  Padding(
+                    padding: const EdgeInsets.only(top: 1),
+                    child: Text(subtitle!, style: const TextStyle(fontSize: 10.5, color: VaultColors.dim)),
+                  ),
+              ],
+            ),
+          ),
+          ...actions,
+          const SizedBox(width: 10),
+        ],
+      ),
+    );
+  }
+}
+
+/// 空态 / 错误态占位。
+class VaultEmpty extends StatelessWidget {
+  const VaultEmpty({required this.icon, required this.title, this.action, super.key});
+
+  final String icon;
+  final String title;
+  final Widget? action;
+
+  @override
+  Widget build(BuildContext context) {
+    return Center(
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 40),
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            VIcon(icon, size: 30, color: const Color(0xFF3A3F46)),
+            const SizedBox(height: 14),
+            Text(title, textAlign: TextAlign.center, style: const TextStyle(fontSize: 13, color: VaultColors.muted)),
+            if (action != null) ...[const SizedBox(height: 18), action!],
+          ],
+        ),
+      ),
+    );
+  }
+}

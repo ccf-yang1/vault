@@ -1,0 +1,10 @@
+.dart_tool/
+build/
+ios/
+android/
+.multipass/
+*.iml
+.flutter-plugins
+.flutter-plugins-dependencies
+.env
+dev-notes.md
