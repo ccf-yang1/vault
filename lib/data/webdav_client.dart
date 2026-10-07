@@ -498,6 +498,32 @@ class WebDavClient {
     }
   }
 
+  /// 探一次分段请求是否真被支持：只要 1 个字节，看服务器有没有老实回 206。
+  /// AVPlayer 的流式播放和拖动进度条全靠 Range，服务器忽略它（照样回 200 + 整个
+  /// 文件）时「能播但拖不动」，所以视频页先探再决定走流式还是整段下载。
+  /// 任何异常都当不支持处理（回 false 让调用方退回下载），不往外抛。
+  Future<bool> rangeSupported(String path) async {
+    try {
+      final res = await _dio.get<ResponseBody>(
+        urlFor(path).toString(),
+        options: _options(
+          method: 'GET',
+          responseType: ResponseType.stream,
+          headers: {'Range': 'bytes=0-0'},
+          receiveTimeout: const Duration(seconds: 15),
+          validateStatus: (status) => status != null && status < 500,
+        ),
+      );
+      // 只看状态码，正文一个字节都不读：服务器忽略 Range 时它会一直往下灌整个文件，
+      // 取消订阅让 dart:io 断掉这条连接，几个 G 不会被拖进流量和内存里。
+      final stream = res.data?.stream;
+      if (stream != null) await stream.listen(null).cancel();
+      return res.statusCode == HttpStatus.partialContent;
+    } on Object {
+      return false;
+    }
+  }
+
   Future<void> download(
     String path,
     String destination, {

@@ -16,9 +16,10 @@ import '../state/session_providers.dart';
 
 /// HTML 04（旧版）：视频播放器。
 ///
-/// WebDAV 需要认证头，AVFoundation 又没法带 header，所以播放地址来自本地回环
-/// 代理（[AuthProxy]）；拖进度条依赖 Range，代理会原样转发，因此是「边播边预取」
-/// 而不是先下完再播（需求 §3.4）。
+/// 大文件走「流式优先」：AVFoundation 没有带 header 的位置，所以播放地址来自本地
+/// 回环代理（[AuthProxy]），由它补 Basic 认证、把 Range 原样转发并回传 Content-Range。
+/// 播放器从头分段取，首帧到了就有画面，拖动是一次毫秒级往返（需求 §3.4）。
+/// 服务器对 Range 不回 206（能播但拖不动）、或流式半路报错时，自动退回整段下载再本地播。
 class VideoPage extends ConsumerStatefulWidget {
   const VideoPage({required this.entry, this.localFile, super.key});
 
@@ -41,6 +42,10 @@ class _VideoPageState extends ConsumerState<VideoPage> with WidgetsBindingObserv
   Timer? _hideTimer;
 
   bool _fullscreen = false;
+  // 当前画面来源，用于副标题与「流式失败退回下载」的判定。
+  _PlayMode _mode = _PlayMode.none;
+  // 半路报错自动退回下载只做一次，免得来回重建控制器。
+  bool _fallbackTried = false;
   // 画面上横向拖动 seek：按下时记下起点 x 与当前播放位置，按整屏宽度映射到时长。
   // 拖动只覆盖视频层、不含底部进度条 Slider，两者手势不会互相抢（这正是当初去掉
   // 整屏横扫改拖进度条的原因，现在分层就能同时保留）。
@@ -100,44 +105,91 @@ class _VideoPageState extends ConsumerState<VideoPage> with WidgetsBindingObserv
 
   Future<void> _open() async {
     final local = widget.localFile;
-    // 远程视频先整段下到沙盒再本地播：OpenList 代理云盘时 Range 支持不稳，
-    // 依赖 Range 的流式常常开不了头或拖不动；普通 GET 下载反而是稳的。
-    // 下不动（文件太大 / 沙盒写不进）再退回本地代理边播边取。
+    if (local != null) {
+      if (await _tryFile(local, _PlayMode.file)) return;
+      _fail();
+      return;
+    }
+    // 沙盒里已经有完整文件（之前看过/下过）：直接本地播，不用再走网络。
+    final cached = await _cachedFile();
+    if (cached != null && await _tryFile(cached, _PlayMode.file)) return;
+    // 流式优先：Range 能用就走代理边取边播，几个 G 也是点开就播、抬手就拖。
+    if (await _rangeWorks() && await _tryStream()) return;
+    // 兜底：服务器忽略 Range（能播但拖不动）或流式起不来，退回整段下载。
+    await _downloadAndPlay();
+  }
+
+  /// 只查沙盒缓存，不触发下载。
+  Future<File?> _cachedFile() async {
     try {
-      final controller = local != null
-          ? VideoPlayerController.file(
-              local,
-              videoPlayerOptions: VideoPlayerOptions(mixWithOthers: false),
-            )
-          : VideoPlayerController.file(
-              await ref.read(cachedFileProvider(cacheKeyFor(widget.entry)).future),
-              videoPlayerOptions: VideoPlayerOptions(mixWithOthers: false),
-            );
-      await controller.initialize();
-      _adopt(controller);
-    } on Object {
-      if (local == null && mounted) {
-        try {
-          final controller = VideoPlayerController.networkUrl(
-            await ref.read(proxyProvider).urlFor(widget.entry.path),
-            videoPlayerOptions: VideoPlayerOptions(mixWithOthers: false),
-          );
-          await controller.initialize();
-          _adopt(controller);
-          return;
-        } on Object {
-          // 代理也放不出来，落到下面的错误态。
-        }
+      final key = cacheKeyFor(widget.entry);
+      final cache = ref.read(cacheProvider);
+      final file = await cache.fileFor(
+        bucketForExtension(key.ext),
+        remotePath: key.path,
+        displayName: key.name,
+        etag: key.etag,
+        ext: key.ext.startsWith('.') ? key.ext.substring(1) : key.ext,
+      );
+      if (await file.exists() && await file.length() > 0) {
+        await cache.touch(file);
+        return file;
       }
-      if (!mounted) return;
-      setState(() {
-        _loading = false;
-        _error = _friendly(widget.entry.extension);
-      });
+      return null;
+    } on Object {
+      return null;
     }
   }
 
-  void _adopt(VideoPlayerController controller) {
+  Future<bool> _rangeWorks() async {
+    try {
+      return await ref.read(davProvider).rangeSupported(widget.entry.path);
+    } on Object {
+      return false;
+    }
+  }
+
+  Future<bool> _tryStream() async {
+    try {
+      final controller = VideoPlayerController.networkUrl(
+        await ref.read(proxyProvider).urlFor(widget.entry.path),
+        videoPlayerOptions: VideoPlayerOptions(mixWithOthers: false),
+      );
+      await controller.initialize();
+      _adopt(controller, _PlayMode.stream);
+      return true;
+    } on Object {
+      return false;
+    }
+  }
+
+  Future<bool> _tryFile(File file, _PlayMode mode) async {
+    try {
+      final controller = VideoPlayerController.file(
+        file,
+        videoPlayerOptions: VideoPlayerOptions(mixWithOthers: false),
+      );
+      await controller.initialize();
+      _adopt(controller, mode);
+      return true;
+    } on Object {
+      return false;
+    }
+  }
+
+  Future<void> _downloadAndPlay() async {
+    if (!mounted) return;
+    setState(() => _mode = _PlayMode.download);
+    try {
+      final file = await ref.read(cachedFileProvider(cacheKeyFor(widget.entry)).future);
+      if (await _tryFile(file, _PlayMode.download)) return;
+    } on Object {
+      // 整段下载也失败，落到下面的错误态。
+    }
+    _fail();
+  }
+
+  void _adopt(VideoPlayerController controller, _PlayMode mode) {
     controller.addListener(_onTick);
     if (!mounted) {
       unawaited(controller.dispose());
@@ -145,20 +197,63 @@ class _VideoPageState extends ConsumerState<VideoPage> with WidgetsBindingObserv
     }
     setState(() {
       _controller = controller;
+      _mode = mode;
       _loading = false;
+      _error = null;
     });
     _scheduleHide();
+  }
+
+  void _fail() {
+    if (!mounted) return;
+    setState(() {
+      _loading = false;
+      _error = _friendly(widget.entry.extension);
+    });
+  }
+
+  void _retry() {
+    final controller = _controller;
+    if (controller != null) {
+      controller.removeListener(_onTick);
+      unawaited(controller.dispose());
+    }
+    setState(() {
+      _controller = null;
+      _loading = true;
+      _error = null;
+      _scrubbing = false;
+      _mode = _PlayMode.none;
+      _fallbackTried = false;
+    });
+    unawaited(_open());
   }
 
   static String _friendly(String ext) => switch (ext) {
         '.mkv' || '.avi' || '.flv' || '.wmv' || '.ts' || '.webm' || '.rmvb' || '.rm' ||
         '.m2ts' || '.vob' || '.mpg' || '.mpeg' || '.mxf' || '.ogv' =>
           'iOS 自带播放器不支持 $ext，换成 MP4 / MOV 再试',
-        _ => '视频打不开：可能是较大文件没下完（网络/服务器停顿），或该视频编码 iOS 解码不了。可点重试。',
+        _ => '视频打不开：流式播放和整段下载都没成功，可能是这个编码 iOS 解不了，或服务器响应异常。可点重试。',
       };
 
   void _onTick() {
-    if (_controller?.value.isBuffering ?? false) return;
+    final controller = _controller;
+    if (controller == null) return;
+    // 流式半路报错（连接断了、某一段取不到）：自己退回整段下载，不用用户手动重试。
+    if (_mode == _PlayMode.stream && controller.value.hasError) {
+      if (_fallbackTried) return;
+      _fallbackTried = true;
+      controller.removeListener(_onTick);
+      unawaited(controller.dispose());
+      setState(() {
+        _controller = null;
+        _loading = true;
+        _mode = _PlayMode.download;
+      });
+      unawaited(_downloadAndPlay());
+      return;
+    }
+    if (controller.value.isBuffering) return;
     if (mounted) setState(() {});
   }
 
@@ -195,6 +290,12 @@ class _VideoPageState extends ConsumerState<VideoPage> with WidgetsBindingObserv
     });
   }
 
+  String get _modeLabel => switch (_mode) {
+        _PlayMode.stream => '流式播放',
+        _PlayMode.download => '下载后播放',
+        _ => widget.localFile != null ? '已解压后播放' : '本地缓存播放',
+      };
+
   @override
   Widget build(BuildContext context) {
     final controller = _controller;
@@ -226,7 +327,7 @@ class _VideoPageState extends ConsumerState<VideoPage> with WidgetsBindingObserv
                 title: widget.entry.name,
                 subtitle: [
                   widget.entry.size > 0 ? formatBytes(widget.entry.size) : null,
-                  _loading ? '连接中' : (widget.localFile == null ? '缓冲后播放' : '已解压后播放'),
+                  _loading ? '连接中' : _modeLabel,
                 ].whereType<String>().join(' · '),
               ),
               Expanded(child: _player(controller, position, total, progress)),
@@ -256,7 +357,10 @@ class _VideoPageState extends ConsumerState<VideoPage> with WidgetsBindingObserv
                 child: CircularProgressIndicator(strokeWidth: 2.4, color: VaultColors.accent),
               ),
               SizedBox(height: 16),
-              Text('正在缓冲视频…', style: TextStyle(fontSize: 13, color: VaultColors.muted)),
+              Text(
+                _mode == _PlayMode.download ? '这个服务器不支持分段播放，正在先下载…' : '正在打开视频…',
+                style: TextStyle(fontSize: 13, color: VaultColors.muted),
+              ),
             ],
           ),
         ),
@@ -279,7 +383,7 @@ class _VideoPageState extends ConsumerState<VideoPage> with WidgetsBindingObserv
                   style: TextStyle(fontSize: 13, color: VaultColors.muted, height: 1.6),
                 ),
                 const SizedBox(height: 20),
-                GhostButton(label: '重 试', onPressed: () => setState(_open)),
+                GhostButton(label: '重 试', onPressed: _retry),
               ],
             ),
           ),
@@ -500,3 +604,7 @@ class _VideoPageState extends ConsumerState<VideoPage> with WidgetsBindingObserv
     );
   }
 }
+
+/// 画面来源：none 还没起播，stream 走代理流式，file 本地文件（缓存命中或压缩包解压），
+/// download 是为兜底刚整段下完的。
+enum _PlayMode { none, stream, file, download }

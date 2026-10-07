@@ -184,6 +184,19 @@ void main() {
         throwsA(isA<WebDavError>().having((e) => e.kind, 'kind', WebDavErrorKind.rangeUnsupported)),
       );
     });
+
+    test('探测：回 206 就判定支持分段', () async {
+      expect(await client.rangeSupported('/旅行/movie.mp4'), isTrue);
+    });
+
+    test('探测：服务器忽略 Range 时判定不支持', () async {
+      server.ignoreRange = true;
+      expect(await client.rangeSupported('/旅行/movie.mp4'), isFalse);
+    });
+
+    test('探测：文件不存在时判定不支持，不抛错', () async {
+      expect(await client.rangeSupported('/旅行/nope.mp4'), isFalse);
+    });
   });
 
   group('上传下载', () {
