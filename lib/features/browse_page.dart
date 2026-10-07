@@ -11,6 +11,7 @@ import '../state/browse_providers.dart';
 import '../state/session_providers.dart';
 import 'archive_page.dart';
 import 'audio_player_page.dart';
+import 'doc_viewer_page.dart';
 import 'image_viewer_page.dart';
 import 'media_filter_page.dart';
 import 'video_page.dart';
@@ -76,6 +77,8 @@ class _BrowsePageState extends ConsumerState<BrowsePage> {
           return;
         }
         Navigator.of(context).push(MaterialPageRoute(builder: (_) => ArchivePage(entry: entry)));
+      case FileKind.doc:
+        Navigator.of(context).push(MaterialPageRoute(builder: (_) => DocViewerPage(entry: entry)));
       case FileKind.other:
         showVaultToast(context, '${entry.name} 不是可预览的文件类型', error: true);
     }
@@ -483,6 +486,7 @@ class _EntryRow extends ConsumerWidget {
       FileKind.video => 'video',
       FileKind.audio => 'audio',
       FileKind.archive => 'zip',
+      FileKind.doc => 'doc',
       FileKind.other => 'list',
     };
   }
@@ -495,6 +499,7 @@ class _EntryRow extends ConsumerWidget {
       FileKind.video => VaultColors.purple,
       FileKind.audio => VaultColors.accentText,
       FileKind.archive => VaultColors.orange,
+      FileKind.doc => VaultColors.accent,
       FileKind.other => VaultColors.muted,
     };
   }

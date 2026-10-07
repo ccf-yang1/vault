@@ -43,7 +43,7 @@ void main() {
       expect(entries[0].isDir, isTrue);
       expect(entries[2].path, '/readme.txt');
       expect(entries[2].size, 11);
-      expect(entries[2].kind, FileKind.other);
+      expect(entries[2].kind, FileKind.doc);
       expect(entries[2].modified, isNotNull);
     });
 

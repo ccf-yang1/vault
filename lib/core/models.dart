@@ -12,7 +12,7 @@ enum StorageType {
       values.firstWhere((t) => t.name == name, orElse: () => webdav);
 }
 
-enum FileKind { folder, image, video, audio, archive, other }
+enum FileKind { folder, image, video, audio, archive, doc, other }
 
 class ConnectionConfig {
   const ConnectionConfig({
@@ -101,6 +101,7 @@ class RemoteEntry {
     if (_videoExts.contains(ext)) return FileKind.video;
     if (_audioExts.contains(ext)) return FileKind.audio;
     if (_archiveExts.contains(ext)) return FileKind.archive;
+    if (_docExts.contains(ext)) return FileKind.doc;
     return FileKind.other;
   }
 
@@ -122,6 +123,13 @@ class RemoteEntry {
   static const _videoExts = {'.mp4', '.mov', '.m4v', '.mkv', '.webm', '.avi', '.flv', '.wmv', '.ts', '.3gp'};
   static const _audioExts = {'.mp3', '.m4a', '.aac', '.wav', '.flac', '.ogg', '.oga', '.opus', '.wma', '.asf', '.aiff', '.aif', '.mka'};
   static const _archiveExts = {'.zip', '.rar', '.7z', '.tar', '.gz', '.tgz'};
+  // 交给系统 QuickLook 预览的常见文档；认不出的类型 open_filex 会自动退回「用其他 App 打开」。
+  static const _docExts = {
+    '.pdf', '.doc', '.docx', '.xls', '.xlsx', '.ppt', '.pptx',
+    '.txt', '.md', '.markdown', '.rtf', '.csv', '.tsv', '.log',
+    '.json', '.xml', '.html', '.htm', '.epub', '.mobi',
+    '.pages', '.numbers', '.key', '.odt', '.ods', '.odp',
+  };
 
   bool get isZip => extension == '.zip';
 }
