@@ -137,24 +137,14 @@ class _CacheTasksPageState extends ConsumerState<CacheTasksPage> {
           Row(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
+              // 只显示目录名，不显示 src 全路径：这一行在退出隐藏模式后仍然看得见，
+              // 把云端层级（例如 来自分享/高中）整个摊开等于替用户把内容来源说出去了。
               Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      record.name,
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      style: TextStyle(fontSize: 13.5, fontWeight: FontWeight.w600, color: VaultColors.text),
-                    ),
-                    const SizedBox(height: 3),
-                    Text(
-                      record.src,
-                      maxLines: 2,
-                      overflow: TextOverflow.ellipsis,
-                      style: TextStyle(fontSize: 11, color: VaultColors.dim),
-                    ),
-                  ],
+                child: Text(
+                  record.name,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: TextStyle(fontSize: 13.5, fontWeight: FontWeight.w600, color: VaultColors.text),
                 ),
               ),
               const SizedBox(width: 10),
