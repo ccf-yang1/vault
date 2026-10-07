@@ -9,6 +9,7 @@ import '../core/widgets.dart';
 import '../data/credential_store.dart';
 import '../state/session_providers.dart';
 import 'connect_page.dart';
+import 'theme_page.dart';
 
 // CI 每次 push 会把 pubspec 的 PATCH +1，这里的展示值可能落后一个小版本。
 const String kAppVersion = '1.0.0';
@@ -170,13 +171,43 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
                       padding: const EdgeInsets.only(bottom: 12),
                       child: Text(
                         _saveError!,
-                        style: const TextStyle(fontSize: 11.5, color: Color(0xFFE0736A), height: 1.5),
+                        style: TextStyle(fontSize: 11.5, color: VaultColors.danger, height: 1.5),
                       ),
                     ),
                 ],
               ),
               const SectionTitle('账号'),
               _accountsCard(),
+              const SectionTitle('个性化'),
+              VaultCard(
+                padding: const EdgeInsets.fromLTRB(15, 2, 15, 2),
+                children: [
+                  GestureDetector(
+                    behavior: HitTestBehavior.opaque,
+                    onTap: () => Navigator.of(context).push(
+                      MaterialPageRoute(builder: (_) => const ThemePage()),
+                    ),
+                    child: Padding(
+                      padding: const EdgeInsets.symmetric(vertical: 12),
+                      child: Row(
+                        children: [
+                          VIcon('palette', size: 16, color: VaultColors.accent),
+                          const SizedBox(width: 11),
+                          Expanded(
+                            child: Text('外观主题', style: TextStyle(fontSize: 13, color: VaultColors.text)),
+                          ),
+                          Text(
+                            settings.themeMode.label,
+                            style: const TextStyle(fontSize: 12).copyWith(color: VaultColors.muted),
+                          ),
+                          const SizedBox(width: 4),
+                          VIcon('chevron', size: 15, color: VaultColors.chevron),
+                        ],
+                      ),
+                    ),
+                  ),
+                ],
+              ),
               const SectionTitle('记录'),
               Padding(
                 padding: const EdgeInsets.symmetric(horizontal: 16),
@@ -190,19 +221,19 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
                   padding: const EdgeInsets.symmetric(horizontal: 14),
                   child: Row(
                     children: [
-                      const VIcon('list', size: 15, color: VaultColors.dim),
+                      VIcon('list', size: 15, color: VaultColors.dim),
                       const SizedBox(width: 10),
                       Expanded(
                         child: TextField(
                           controller: _note,
                           onChanged: _onNoteChanged,
-                          style: const TextStyle(fontSize: 13.5, color: Color(0xFFD6D9DE)),
-                          decoration: const InputDecoration(
+                          style: TextStyle(fontSize: 13.5, color: VaultColors.text),
+                          decoration: InputDecoration(
                             isDense: true,
                             border: InputBorder.none,
                             contentPadding: EdgeInsets.zero,
                             hintText: '输入文字…',
-                            hintStyle: TextStyle(fontSize: 13.5, color: Color(0xFF5C626A)),
+                            hintStyle: TextStyle(fontSize: 13.5, color: VaultColors.dim),
                           ),
                         ),
                       ),
@@ -210,7 +241,7 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
                   ),
                 ),
               ),
-              const Padding(
+              Padding(
                 padding: EdgeInsets.fromLTRB(18, 8, 18, 0),
                 child: Text(
                   '随手记点什么，比如今天的天气。',
@@ -314,7 +345,7 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
                     style: TextStyle(
                       fontSize: 13,
                       fontWeight: isActive ? FontWeight.w600 : FontWeight.w400,
-                      color: isActive ? VaultColors.text : const Color(0xFFD6D9DE),
+                      color: isActive ? VaultColors.text : VaultColors.text,
                     ),
                   ),
                   const SizedBox(height: 2),
@@ -322,13 +353,13 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
                     a.displayHost,
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
-                    style: const TextStyle(fontSize: 11, color: VaultColors.dim),
+                    style: TextStyle(fontSize: 11, color: VaultColors.dim),
                   ),
                 ],
               ),
             ),
             if (busy)
-              const SizedBox(
+              SizedBox(
                 width: 15,
                 height: 15,
                 child: CircularProgressIndicator(strokeWidth: 2, color: VaultColors.accent),
@@ -337,9 +368,9 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
               GestureDetector(
                 behavior: HitTestBehavior.opaque,
                 onTap: () => _removeAccount(a),
-                child: const Padding(
+                child: Padding(
                   padding: EdgeInsets.only(left: 8),
-                  child: VIcon('close', size: 15, color: Color(0xFF5A6068)),
+                  child: VIcon('close', size: 15, color: VaultColors.dim),
                 ),
               ),
           ],
@@ -354,7 +385,7 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
       onTap: () => Navigator.of(context).push(
         MaterialPageRoute(builder: (_) => const ConnectPage(addMode: true)),
       ),
-      child: const Padding(
+      child: Padding(
         padding: EdgeInsets.symmetric(vertical: 12),
         child: Row(
           children: [
@@ -391,16 +422,16 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
       builder: (ctx) => AlertDialog(
         backgroundColor: VaultColors.surface,
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-        title: const Text('移除账号', style: TextStyle(fontSize: 16, color: VaultColors.text)),
+        title: Text('移除账号', style: TextStyle(fontSize: 16, color: VaultColors.text)),
         content: Text(
           '把 $label 从本机移除？只影响这台设备上的登录信息，不会删服务器上的文件。',
-          style: const TextStyle(fontSize: 13, color: VaultColors.muted, height: 1.6),
+          style: TextStyle(fontSize: 13, color: VaultColors.muted, height: 1.6),
         ),
         actions: [
           TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('取消')),
           TextButton(
             onPressed: () => Navigator.pop(ctx, true),
-            child: const Text('移除', style: TextStyle(color: Color(0xFFE0736A))),
+            child: Text('移除', style: TextStyle(color: VaultColors.danger)),
           ),
         ],
       ),
@@ -422,7 +453,7 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
             height: 34,
             alignment: Alignment.center,
             decoration: BoxDecoration(
-              color: active ? const Color(0xFF252932) : Colors.transparent,
+              color: active ? VaultColors.segActive : Colors.transparent,
               borderRadius: BorderRadius.circular(9),
             ),
             child: Text(
@@ -438,7 +469,7 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
       margin: const EdgeInsets.only(bottom: 18),
       padding: const EdgeInsets.all(3),
       decoration: BoxDecoration(
-        color: const Color(0xFF15171A),
+        color: VaultColors.fieldFill,
         borderRadius: BorderRadius.circular(12),
         border: Border.all(color: VaultColors.line),
       ),
@@ -486,16 +517,16 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
                 const Expanded(
                   child: Text('隐藏模式已开启', style: TextStyle(fontSize: 13, color: Color(0xFFCFC2E8))),
                 ),
-                Text('${dirs.length} 个目录', style: const TextStyle(fontSize: 11, color: Color(0xFF8E7CC3))),
+                Text('${dirs.length} 个目录', style: TextStyle(fontSize: 11, color: VaultColors.purpleDeep)),
               ],
             ),
           ),
           if (dirs.isEmpty)
-            const Padding(
+            Padding(
               padding: EdgeInsets.fromLTRB(15, 0, 15, 12),
               child: Text(
                 '还没有隐藏任何目录。在浏览页点行右侧的眼睛即可隐藏。',
-                style: TextStyle(fontSize: 11.5, color: Color(0xFF8E7CC3), height: 1.6),
+                style: TextStyle(fontSize: 11.5, color: VaultColors.purpleDeep, height: 1.6),
               ),
             )
           else
@@ -511,7 +542,7 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
                       ),
                       child: Row(
                         children: [
-                          const VIcon('folder', size: 14, color: Color(0xFF8E7CC3)),
+                          VIcon('folder', size: 14, color: VaultColors.purpleDeep),
                           const SizedBox(width: 8),
                           Expanded(
                             child: Text(
@@ -530,9 +561,9 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
                                   RemoteEntry(name: dir.name, path: dir.path, isDir: true),
                                   false,
                                 ),
-                            child: const Padding(
+                            child: Padding(
                               padding: EdgeInsets.only(left: 6),
-                              child: VIcon('close', size: 14, color: Color(0xFF8E7CC3)),
+                              child: VIcon('close', size: 14, color: VaultColors.purpleDeep),
                             ),
                           ),
                         ],
@@ -544,12 +575,12 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
           GestureDetector(
             behavior: HitTestBehavior.opaque,
             onTap: () => ref.read(hiddenModeProvider.notifier).state = false,
-            child: const Padding(
+            child: Padding(
               padding: EdgeInsets.symmetric(vertical: 11),
               child: Text(
                 '退出隐藏模式',
                 textAlign: TextAlign.center,
-                style: TextStyle(fontSize: 12.5, color: Color(0xFF8E7CC3)),
+                style: TextStyle(fontSize: 12.5, color: VaultColors.purpleDeep),
               ),
             ),
           ),
@@ -565,7 +596,7 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
         children: [
           SizedBox(
             width: 62,
-            child: Text(label, style: const TextStyle(fontSize: 12.5, color: VaultColors.dim)),
+            child: Text(label, style: TextStyle(fontSize: 12.5, color: VaultColors.dim)),
           ),
           Expanded(
             child: Text(
@@ -574,7 +605,7 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
               overflow: TextOverflow.ellipsis,
               style: TextStyle(
                 fontSize: mono ? 12 : 12.5,
-                color: const Color(0xFFD6D9DE),
+                color: VaultColors.text,
                 fontFeatures: mono ? const [FontFeature.tabularFigures()] : null,
               ),
             ),
@@ -596,7 +627,7 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
               textAlign: TextAlign.right,
               style: TextStyle(
                 fontSize: 12.5,
-                color: danger ? const Color(0xFFE0736A) : VaultColors.accent,
+                color: danger ? VaultColors.danger : VaultColors.accent,
               ),
             ),
           ),
@@ -614,7 +645,7 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
         children: [
           Row(
             children: [
-              const SizedBox(
+              SizedBox(
                 width: 62,
                 child: Text('上限', style: TextStyle(fontSize: 12.5, color: VaultColors.dim)),
               ),
@@ -622,7 +653,7 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
                 child: Text(
                   '${settings.cacheLimitMB} MB · 超出删最旧',
                   textAlign: TextAlign.right,
-                  style: const TextStyle(fontSize: 12, color: Color(0xFFD6D9DE)),
+                  style: TextStyle(fontSize: 12, color: VaultColors.text),
                 ),
               ),
             ],
@@ -640,7 +671,7 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
                       margin: EdgeInsets.only(right: mb == 2000 ? 0 : 7),
                       alignment: Alignment.center,
                       decoration: BoxDecoration(
-                        color: settings.cacheLimitMB == mb ? const Color(0xFF252932) : VaultColors.field,
+                        color: settings.cacheLimitMB == mb ? VaultColors.segActive : VaultColors.field,
                         borderRadius: BorderRadius.circular(10),
                         border: Border.all(
                           color: settings.cacheLimitMB == mb
@@ -652,7 +683,7 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
                         '$mb',
                         style: TextStyle(
                           fontSize: 11.5,
-                          color: settings.cacheLimitMB == mb ? const Color(0xFF9EB0F2) : VaultColors.muted,
+                          color: settings.cacheLimitMB == mb ? VaultColors.accentText : VaultColors.muted,
                         ),
                       ),
                     ),

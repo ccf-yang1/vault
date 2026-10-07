@@ -74,15 +74,17 @@ final Map<String, String> _svg = {
   'sort': _s('<path d="M4 6.5h11M4 12h8M4 17.5h5"/><path d="M18 8.5v10"/><path d="m15 15.5 3 3.5 3-3.5"/>', w: 1.7),
   'queue': _s('<path d="M4 6.5h12M4 12h12M4 17.5h8"/><path d="M18 13.5v6"/><path d="m15.8 17 2.2 2.5 2.2-2.5"/>', w: 1.7),
   'drag': _s('<path d="M5 8h14M5 12h14M5 16h14"/>', w: 1.9),
+  'palette': _s('<path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10c1.1 0 2-.9 2-2 0-.51-.19-.99-.52-1.35-.31-.34-.5-.79-.5-1.3 0-1.1.9-2 2-2h2.34C20.4 15.35 22 13.07 22 10.5 22 5.81 17.52 2 12 2z"/>'
+      '<circle cx="6.5" cy="12" r="1.1"/><circle cx="8.5" cy="7.5" r="1.1"/><circle cx="14.5" cy="7.5" r="1.1"/><circle cx="17" cy="11" r="1.1"/>', w: 1.6),
 };
 
 /// 与 ui.html 同源的单色图标。
 class VIcon extends StatelessWidget {
-  const VIcon(this.name, {this.size = 19, this.color = VaultColors.muted, super.key});
+  const VIcon(this.name, {this.size = 19, this.color, super.key});
 
   final String name;
   final double size;
-  final Color color;
+  final Color? color;
 
   @override
   Widget build(BuildContext context) {
@@ -92,7 +94,7 @@ class VIcon extends StatelessWidget {
       src ?? '',
       width: size,
       height: size,
-      colorFilter: ColorFilter.mode(color, BlendMode.srcIn),
+      colorFilter: ColorFilter.mode(color ?? VaultColors.muted, BlendMode.srcIn),
     );
   }
 }

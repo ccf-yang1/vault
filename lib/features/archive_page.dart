@@ -66,7 +66,7 @@ class _ArchivePageState extends ConsumerState<ArchivePage> {
                 subtitle: 'ZIP · 只读浏览',
               ),
               zip.when(
-                loading: () => const Expanded(
+                loading: () => Expanded(
                   child: Center(
                     child: Column(
                       mainAxisAlignment: MainAxisAlignment.center,
@@ -117,13 +117,13 @@ class _ArchivePageState extends ConsumerState<ArchivePage> {
           ),
           child: Row(
             children: [
-              const VIcon('shieldCheck', size: 15, color: VaultColors.green),
+              VIcon('shieldCheck', size: 15, color: VaultColors.green),
               const SizedBox(width: 8),
               Expanded(
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    const Text('可按需浏览', style: TextStyle(fontSize: 12.5, color: VaultColors.green)),
+                    Text('可按需浏览', style: TextStyle(fontSize: 12.5, color: VaultColors.green)),
                     const SizedBox(height: 2),
                     Text(
                       '${formatCount(zip.entries.length)} 个条目 · 解压后约 ${formatBytes(bytes)} · 点开才解压',
@@ -138,7 +138,7 @@ class _ArchivePageState extends ConsumerState<ArchivePage> {
                   borderRadius: BorderRadius.circular(6),
                   border: Border.all(color: VaultColors.green.withValues(alpha: 0.3)),
                 ),
-                child: const Text('只读', style: TextStyle(fontSize: 9.5, color: VaultColors.green)),
+                child: Text('只读', style: TextStyle(fontSize: 9.5, color: VaultColors.green)),
               ),
             ],
           ),
@@ -148,12 +148,12 @@ class _ArchivePageState extends ConsumerState<ArchivePage> {
             padding: const EdgeInsets.fromLTRB(22, 0, 22, 8),
             child: Row(
               children: [
-                const VIcon('folderOpen', size: 13, color: VaultColors.muted),
+                VIcon('folderOpen', size: 13, color: VaultColors.muted),
                 const SizedBox(width: 6),
                 Expanded(
                   child: Text(
                     _prefix,
-                    style: const TextStyle(
+                    style: TextStyle(
                       fontSize: 11.5,
                       color: VaultColors.muted,
                       fontFeatures: [FontFeature.tabularFigures()],
@@ -198,7 +198,7 @@ class _ArchivePageState extends ConsumerState<ArchivePage> {
       onTap: () => _open(zip, entry),
       child: Container(
         padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 11),
-        decoration: const BoxDecoration(
+        decoration: BoxDecoration(
           border: Border(bottom: BorderSide(color: VaultColors.line)),
         ),
         child: Row(
@@ -221,16 +221,16 @@ class _ArchivePageState extends ConsumerState<ArchivePage> {
                     entry.displayName,
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
-                    style: const TextStyle(fontSize: 14, color: VaultColors.text, fontWeight: FontWeight.w500),
+                    style: TextStyle(fontSize: 14, color: VaultColors.text, fontWeight: FontWeight.w500),
                   ),
                   const SizedBox(height: 2),
-                  Text(_subtitle(entry), style: const TextStyle(fontSize: 11.5, color: VaultColors.muted)),
+                  Text(_subtitle(entry), style: TextStyle(fontSize: 11.5, color: VaultColors.muted)),
                 ],
               ),
             ),
             if (!entry.isDir && entry.isEncrypted)
               const Padding(padding: EdgeInsets.only(right: 6), child: VIcon('lock', size: 14)),
-            const VIcon('chevron', size: 16, color: Color(0xFF3A3F46)),
+            VIcon('chevron', size: 16, color: VaultColors.chevron),
           ],
         ),
       ),

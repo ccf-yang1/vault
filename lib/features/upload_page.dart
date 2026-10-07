@@ -45,13 +45,13 @@ class _UploadPageState extends ConsumerState<UploadPage> {
       builder: (context) => StatefulBuilder(
         builder: (context, setDialogState) => AlertDialog(
           backgroundColor: VaultColors.surface,
-          title: const Text('最近 N 天', style: TextStyle(fontSize: 16, color: VaultColors.text)),
+          title: Text('最近 N 天', style: TextStyle(fontSize: 16, color: VaultColors.text)),
           content: SizedBox(
             width: 240,
             child: Column(
               mainAxisSize: MainAxisSize.min,
               children: [
-                Text('选中最近 $chosen 天拍摄的照片', style: const TextStyle(fontSize: 12.5, color: VaultColors.muted)),
+                Text('选中最近 $chosen 天拍摄的照片', style: TextStyle(fontSize: 12.5, color: VaultColors.muted)),
                 const SizedBox(height: 12),
                 Slider(
                   value: chosen.toDouble(),
@@ -118,20 +118,20 @@ class _UploadPageState extends ConsumerState<UploadPage> {
         ),
         child: Row(
           children: [
-            const VIcon('folder', size: 16, color: VaultColors.accent),
+            VIcon('folder', size: 16, color: VaultColors.accent),
             const SizedBox(width: 9),
             Expanded(
               child: Text(
                 directory,
                 overflow: TextOverflow.ellipsis,
-                style: const TextStyle(
+                style: TextStyle(
                   fontSize: 12,
-                  color: Color(0xFFC9CDD4),
+                  color: VaultColors.text,
                   fontFeatures: [FontFeature.tabularFigures()],
                 ),
               ),
             ),
-            const Text('更改', style: TextStyle(fontSize: 12, color: VaultColors.accent)),
+            Text('更改', style: TextStyle(fontSize: 12, color: VaultColors.accent)),
           ],
         ),
       ),
@@ -188,7 +188,7 @@ class _UploadPageState extends ConsumerState<UploadPage> {
 
   Widget _assets(UploadState state, UploadController controller) {
     if (state.loading) {
-      return const Center(
+      return Center(
         child: SizedBox(
           width: 22,
           height: 22,
@@ -203,9 +203,9 @@ class _UploadPageState extends ConsumerState<UploadPage> {
           child: Column(
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
-              const VIcon('image', size: 28, color: Color(0xFF3A3F46)),
+              VIcon('image', size: 28, color: VaultColors.chevron),
               const SizedBox(height: 14),
-              const Text(
+              Text(
                 '没有相册读取权限，无法选择要上传的照片。',
                 textAlign: TextAlign.center,
                 style: TextStyle(fontSize: 13, color: VaultColors.muted, height: 1.6),
@@ -243,12 +243,12 @@ class _UploadPageState extends ConsumerState<UploadPage> {
               child: Row(
                 children: [
                   Expanded(child: Text(formatDayLabel(bucket.day), style: const TextStyle(fontSize: 12.5, color: Color(0xFFB9BEC6)))),
-                  Text('${bucket.assets.length} 项', style: const TextStyle(fontSize: 11, color: VaultColors.dim)),
+                  Text('${bucket.assets.length} 项', style: TextStyle(fontSize: 11, color: VaultColors.dim)),
                   const SizedBox(width: 8),
                   GestureDetector(
                     behavior: HitTestBehavior.opaque,
                     onTap: () => controller.selectAll(bucket.assets),
-                    child: const Text('全选', style: TextStyle(fontSize: 11.5, color: VaultColors.accent)),
+                    child: Text('全选', style: TextStyle(fontSize: 11.5, color: VaultColors.accent)),
                   ),
                 ],
               ),
@@ -274,7 +274,7 @@ class _UploadPageState extends ConsumerState<UploadPage> {
             if (bucket.assets.length > 12)
               Padding(
                 padding: const EdgeInsets.fromLTRB(20, 8, 20, 0),
-                child: Text('还有 ${bucket.assets.length - 12} 项未显示', style: const TextStyle(fontSize: 11, color: VaultColors.dim)),
+                child: Text('还有 ${bucket.assets.length - 12} 项未显示', style: TextStyle(fontSize: 11, color: VaultColors.dim)),
               ),
           ],
         );
@@ -307,27 +307,27 @@ class _UploadPageState extends ConsumerState<UploadPage> {
                           : '上传完成 ${state.doneCount} / ${tasks.length}',
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
-                  style: const TextStyle(fontSize: 12, color: VaultColors.text),
+                  style: TextStyle(fontSize: 12, color: VaultColors.text),
                 ),
               ),
               if (state.uploading)
                 GestureDetector(
                   behavior: HitTestBehavior.opaque,
                   onTap: controller.cancelUpload,
-                  child: const Text('取消', style: TextStyle(fontSize: 12, color: Color(0xFFE0736A))),
+                  child: Text('取消', style: TextStyle(fontSize: 12, color: VaultColors.danger)),
                 )
               else if (state.failedCount > 0)
                 GestureDetector(
                   behavior: HitTestBehavior.opaque,
                   onTap: controller.retryFailed,
-                  child: Text('重试 ${state.failedCount} 项', style: const TextStyle(fontSize: 12, color: VaultColors.accent)),
+                  child: Text('重试 ${state.failedCount} 项', style: TextStyle(fontSize: 12, color: VaultColors.accent)),
                 ),
               if (!state.uploading) ...[
                 const SizedBox(width: 14),
                 GestureDetector(
                   behavior: HitTestBehavior.opaque,
                   onTap: controller.dismissQueue,
-                  child: const Padding(
+                  child: Padding(
                     padding: EdgeInsets.symmetric(horizontal: 2, vertical: 1),
                     child: VIcon('close', size: 15, color: VaultColors.dim),
                   ),
@@ -361,7 +361,7 @@ class _UploadPageState extends ConsumerState<UploadPage> {
                     size: 13,
                     color: switch (task.status) {
                       UploadStatus.done => VaultColors.green,
-                      UploadStatus.failed => const Color(0xFFE0736A),
+                      UploadStatus.failed => VaultColors.danger,
                       UploadStatus.canceled => VaultColors.dim,
                       _ => VaultColors.accent,
                     },
@@ -372,7 +372,7 @@ class _UploadPageState extends ConsumerState<UploadPage> {
                       task.error != null ? '${task.fileName} · ${task.error}' : task.fileName,
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
-                      style: const TextStyle(fontSize: 11, color: VaultColors.muted),
+                      style: TextStyle(fontSize: 11, color: VaultColors.muted),
                     ),
                   ),
                 ],
@@ -386,25 +386,25 @@ class _UploadPageState extends ConsumerState<UploadPage> {
   Widget _selBar(UploadState state, UploadController controller) {
     final message = state.message;
     return Container(
-      decoration: const BoxDecoration(border: Border(top: BorderSide(color: VaultColors.line))),
+      decoration: BoxDecoration(border: Border(top: BorderSide(color: VaultColors.line))),
       padding: const EdgeInsets.fromLTRB(16, 10, 16, 10),
       child: Column(
         children: [
           if (message != null)
             Padding(
               padding: const EdgeInsets.only(bottom: 8),
-              child: Text(message, style: const TextStyle(fontSize: 11.5, color: Color(0xFFE0736A))),
+              child: Text(message, style: TextStyle(fontSize: 11.5, color: VaultColors.danger)),
             ),
           Row(
             children: [
               Expanded(
                 child: RichText(
                   text: TextSpan(
-                    style: const TextStyle(fontSize: 12.5, color: VaultColors.muted),
+                    style: TextStyle(fontSize: 12.5, color: VaultColors.muted),
                     children: [
                       TextSpan(
                         text: '${state.selected.length}',
-                        style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w600, color: Color(0xFFEDEEF0)),
+                        style: TextStyle(fontSize: 15, fontWeight: FontWeight.w600, color: VaultColors.textBright),
                       ),
                       TextSpan(text: ' 项 · ${formatBytes(state.selectedBytes)}'),
                     ],

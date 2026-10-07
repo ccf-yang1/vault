@@ -43,12 +43,12 @@ class _DirPickerPageState extends ConsumerState<DirPickerPage> {
       context: context,
       builder: (context) => AlertDialog(
         backgroundColor: VaultColors.surface,
-        title: const Text('新建目录', style: TextStyle(fontSize: 16, color: VaultColors.text)),
+        title: Text('新建目录', style: TextStyle(fontSize: 16, color: VaultColors.text)),
         content: TextField(
           controller: controller,
           autofocus: true,
-          style: const TextStyle(fontSize: 14, color: VaultColors.text),
-          decoration: const InputDecoration(
+          style: TextStyle(fontSize: 14, color: VaultColors.text),
+          decoration: InputDecoration(
             hintText: '目录名',
             hintStyle: TextStyle(color: VaultColors.dim),
           ),
@@ -90,7 +90,7 @@ class _DirPickerPageState extends ConsumerState<DirPickerPage> {
                       child: Text(
                         _path,
                         overflow: TextOverflow.ellipsis,
-                        style: const TextStyle(
+                        style: TextStyle(
                           fontSize: 12,
                           color: VaultColors.accent,
                           fontFeatures: [FontFeature.tabularFigures()],
@@ -102,7 +102,7 @@ class _DirPickerPageState extends ConsumerState<DirPickerPage> {
               ),
               Expanded(
                 child: ref.watch(dirRawProvider(_path)).when(
-                  loading: () => const Center(
+                  loading: () => Center(
                     child: SizedBox(
                       width: 22,
                       height: 22,
@@ -150,7 +150,7 @@ class _DirPickerPageState extends ConsumerState<DirPickerPage> {
       onTap: enabled ? onTap : null,
       child: Container(
         padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 12),
-        decoration: const BoxDecoration(border: Border(bottom: BorderSide(color: VaultColors.line))),
+        decoration: BoxDecoration(border: Border(bottom: BorderSide(color: VaultColors.line))),
         child: Row(
           children: [
             VIcon(isFolder ? 'folder' : 'back', size: 18, color: isFolder ? VaultColors.blue : VaultColors.muted),
@@ -162,12 +162,12 @@ class _DirPickerPageState extends ConsumerState<DirPickerPage> {
                 overflow: TextOverflow.ellipsis,
                 style: TextStyle(
                   fontSize: 14,
-                  color: enabled ? VaultColors.text : const Color(0xFF454B53),
+                  color: enabled ? VaultColors.text : VaultColors.outline,
                   fontWeight: FontWeight.w500,
                 ),
               ),
             ),
-            if (enabled && isFolder) const VIcon('chevron', size: 16, color: Color(0xFF3A3F46)),
+            if (enabled && isFolder) VIcon('chevron', size: 16, color: VaultColors.chevron),
           ],
         ),
       ),

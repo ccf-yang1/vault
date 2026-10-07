@@ -294,6 +294,7 @@ class SettingsController extends Notifier<AppSettings> {
   void setWifiOnly(bool value) => _write(state.copyWith(wifiOnlyUpload: value));
   void setCacheLimit(int mb) => _write(state.copyWith(cacheLimitMB: mb));
   void setRecentDays(int days) => _write(state.copyWith(recentDays: days.clamp(1, 30)));
+  void setThemeMode(VaultThemeMode mode) => _write(state.copyWith(themeMode: mode));
 }
 
 final settingsProvider = NotifierProvider<SettingsController, AppSettings>(SettingsController.new);

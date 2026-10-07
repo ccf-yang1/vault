@@ -152,8 +152,8 @@ class _ConnectPageState extends ConsumerState<ConnectPage> {
       builder: (context) => AlertDialog(
         backgroundColor: VaultColors.surface,
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-        title: const Text('证书不受信任', style: TextStyle(fontSize: 16, color: VaultColors.text)),
-        content: const Text(
+        title: Text('证书不受信任', style: TextStyle(fontSize: 16, color: VaultColors.text)),
+        content: Text(
           '服务器使用的是自签名或已过期证书。继续连接会绕过证书校验，仅在你信任这台机器时选择继续。',
           style: TextStyle(fontSize: 13, color: VaultColors.muted, height: 1.6),
         ),
@@ -196,9 +196,9 @@ class _ConnectPageState extends ConsumerState<ConnectPage> {
                 child: const Center(child: VIcon('brand', size: 26, color: Color(0xFF7D93E8))),
               ),
               const SizedBox(height: 22),
-              const Text('连接到你的存储', style: TextStyle(fontSize: 22, fontWeight: FontWeight.w600, color: Color(0xFFF0F1F3))),
+              Text('连接到你的存储', style: TextStyle(fontSize: 22, fontWeight: FontWeight.w600, color: VaultColors.textBright)),
               const SizedBox(height: 9),
-              const Text(
+              Text(
                 '支持 WebDAV 与 OpenList。',
                 style: TextStyle(fontSize: 12.5, color: VaultColors.muted, height: 1.65),
               ),
@@ -259,12 +259,12 @@ class _ConnectPageState extends ConsumerState<ConnectPage> {
                   child: Row(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      const VIcon('shield', size: 14, color: Color(0xFFE0736A)),
+                      VIcon('shield', size: 14, color: VaultColors.danger),
                       const SizedBox(width: 9),
                       Expanded(
                         child: Text(
                           _error!,
-                          style: const TextStyle(fontSize: 12.5, color: Color(0xFFF0C6C2), height: 1.5),
+                          style: TextStyle(fontSize: 12.5, color: VaultColors.dangerSoft, height: 1.5),
                         ),
                       ),
                     ],
@@ -286,7 +286,7 @@ class _ConnectPageState extends ConsumerState<ConnectPage> {
     return Container(
       padding: const EdgeInsets.all(3),
       decoration: BoxDecoration(
-        color: const Color(0xFF15171A),
+        color: VaultColors.fieldFill,
         borderRadius: BorderRadius.circular(12),
         border: Border.all(color: VaultColors.line),
       ),
@@ -304,7 +304,7 @@ class _ConnectPageState extends ConsumerState<ConnectPage> {
                   padding: const EdgeInsets.symmetric(vertical: 8),
                   alignment: Alignment.center,
                   decoration: BoxDecoration(
-                    color: type == _type ? const Color(0xFF252932) : Colors.transparent,
+                    color: type == _type ? VaultColors.segActive : Colors.transparent,
                     borderRadius: BorderRadius.circular(9),
                     boxShadow: type == _type
                         ? const [BoxShadow(color: Color(0x66000000), blurRadius: 3, offset: Offset(0, 1))]
@@ -337,7 +337,7 @@ class _ConnectPageState extends ConsumerState<ConnectPage> {
         GestureDetector(
           behavior: HitTestBehavior.opaque,
           onTap: () => setState(() => _showLog = !_showLog),
-          child: const Padding(
+          child: Padding(
             padding: EdgeInsets.symmetric(vertical: 6),
             child: Row(
               children: [
@@ -354,13 +354,13 @@ class _ConnectPageState extends ConsumerState<ConnectPage> {
           Container(
             padding: const EdgeInsets.all(11),
             decoration: BoxDecoration(
-              color: const Color(0xFF131518),
+              color: VaultColors.fieldFill,
               borderRadius: BorderRadius.circular(11),
               border: Border.all(color: VaultColors.line),
             ),
             child: SelectableText(
               attempt.render(),
-              style: const TextStyle(
+              style: TextStyle(
                 fontSize: 11,
                 height: 1.65,
                 fontFamily: 'Menlo',
@@ -377,8 +377,8 @@ class _ConnectPageState extends ConsumerState<ConnectPage> {
       alignment: Alignment.centerRight,
       child: TextButton.icon(
         onPressed: () => setState(() => _obscure = !_obscure),
-        style: TextButton.styleFrom(foregroundColor: const Color(0xFF4A5058)),
-        icon: VIcon(_obscure ? 'eye' : 'eyeOff', size: 15, color: const Color(0xFF4A5058)),
+        style: TextButton.styleFrom(foregroundColor: VaultColors.subtle),
+        icon: VIcon(_obscure ? 'eye' : 'eyeOff', size: 15, color: VaultColors.subtle),
         label: Text(_obscure ? '显示密码' : '隐藏密码', style: const TextStyle(fontSize: 12)),
       ),
     );
@@ -391,7 +391,7 @@ class SplashPage extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return const VaultAnnotatedRegion(
+    return VaultAnnotatedRegion(
       child: Scaffold(
         body: Center(
           child: SizedBox(

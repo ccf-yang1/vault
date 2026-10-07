@@ -30,6 +30,7 @@ class PrefsRepository {
         cacheLimitMB: (json['cacheLimitMB'] as num?)?.toInt() ?? 500,
         wifiOnlyUpload: (json['wifiOnlyUpload'] as bool?) ?? false,
         recentDays: ((json['recentDays'] as num?)?.toInt() ?? 7).clamp(1, 30),
+        themeMode: VaultThemeMode.fromName(json['themeMode'] as String?),
       );
     } on Object {
       return const AppSettings();
@@ -41,6 +42,7 @@ class PrefsRepository {
         'cacheLimitMB': settings.cacheLimitMB,
         'wifiOnlyUpload': settings.wifiOnlyUpload,
         'recentDays': settings.recentDays,
+        'themeMode': settings.themeMode.name,
       }));
 
   String loadUploadPath(String accountId) =>

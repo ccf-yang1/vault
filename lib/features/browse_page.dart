@@ -108,17 +108,17 @@ class _BrowsePageState extends ConsumerState<BrowsePage> {
         backgroundColor: VaultColors.surface,
         title: Text(
           entry.isDir ? '删除整个目录？' : '删除这个文件？',
-          style: const TextStyle(fontSize: 16, color: VaultColors.text),
+          style: TextStyle(fontSize: 16, color: VaultColors.text),
         ),
         content: Text(
           '「${entry.name}」${entry.isDir ? ' 及其内部所有内容' : ''}将从服务器上永久删除，无法恢复。',
-          style: const TextStyle(fontSize: 13, color: VaultColors.muted, height: 1.5),
+          style: TextStyle(fontSize: 13, color: VaultColors.muted, height: 1.5),
         ),
         actions: [
           TextButton(onPressed: () => Navigator.of(ctx).pop(false), child: const Text('取消')),
           TextButton(
             onPressed: () => Navigator.of(ctx).pop(true),
-            child: const Text('删除', style: TextStyle(color: Color(0xFFE0736A))),
+            child: Text('删除', style: TextStyle(color: VaultColors.danger)),
           ),
         ],
       ),
@@ -144,16 +144,16 @@ class _BrowsePageState extends ConsumerState<BrowsePage> {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 18),
       alignment: Alignment.centerRight,
-      decoration: const BoxDecoration(
+      decoration: BoxDecoration(
         borderRadius: BorderRadius.all(Radius.circular(12)),
-        color: Color(0xFF3A2325),
+        color: VaultColors.dangerBg,
       ),
       child: Row(
         mainAxisSize: MainAxisSize.min,
         children: [
-          const VIcon('trash', size: 18, color: Color(0xFFE0736A)),
+          VIcon('trash', size: 18, color: VaultColors.danger),
           const SizedBox(width: 6),
-          Text(label, style: const TextStyle(fontSize: 12.5, color: Color(0xFFE0736A))),
+          Text(label, style: TextStyle(fontSize: 12.5, color: VaultColors.danger)),
         ],
       ),
     );
@@ -172,14 +172,14 @@ class _BrowsePageState extends ConsumerState<BrowsePage> {
         ),
         child: Row(
           children: [
-            const VIcon('search', size: 16, color: VaultColors.dim),
+            VIcon('search', size: 16, color: VaultColors.dim),
             const SizedBox(width: 8),
             Expanded(
               child: TextField(
                 controller: _search,
                 autofocus: true,
-                style: const TextStyle(fontSize: 13.5, color: VaultColors.text),
-                decoration: const InputDecoration(
+                style: TextStyle(fontSize: 13.5, color: VaultColors.text),
+                decoration: InputDecoration(
                   isDense: true,
                   border: InputBorder.none,
                   hintText: '按名称搜索当前目录',
@@ -202,7 +202,7 @@ class _BrowsePageState extends ConsumerState<BrowsePage> {
       context: context,
       position: RelativeRect.fromLTRB(width - 132, top, 12, 0),
       color: VaultColors.surface,
-      items: const [
+      items: [
         PopupMenuItem(value: 'image', child: _FilterMenuItem(icon: 'image', label: '图片', color: VaultColors.green)),
         PopupMenuItem(value: 'video', child: _FilterMenuItem(icon: 'video', label: '视频', color: VaultColors.purple)),
         PopupMenuItem(value: 'audio', child: _FilterMenuItem(icon: 'audio', label: '音频', color: VaultColors.accentText)),
@@ -325,15 +325,15 @@ class _BrowsePageState extends ConsumerState<BrowsePage> {
               child: Row(
                 children: [
                   for (var i = 0; i < crumbs.length; i++) ...[
-                    if (i > 0) const Padding(
+                    if (i > 0) Padding(
                           padding: EdgeInsets.symmetric(horizontal: 6),
-                          child: Text('/', style: TextStyle(fontSize: 12.5, color: Color(0xFF3A3F46))),
+                          child: Text('/', style: TextStyle(fontSize: 12.5, color: VaultColors.chevron)),
                         ),
                     Text(
                       i == 0 ? '根目录' : RemotePath.nameOf(crumbs[i]),
                       style: TextStyle(
                         fontSize: 12.5,
-                        color: i == crumbs.length - 1 ? const Color(0xFFC9CDD4) : VaultColors.muted,
+                        color: i == crumbs.length - 1 ? VaultColors.text : VaultColors.muted,
                       ),
                     ),
                   ],
@@ -424,7 +424,7 @@ class _EntryRow extends ConsumerWidget {
                           style: TextStyle(
                             fontSize: 14,
                             fontWeight: FontWeight.w500,
-                            color: isHidden ? const Color(0xFFC4B8DC) : const Color(0xFFE4E6E9),
+                            color: isHidden ? const Color(0xFFC4B8DC) : VaultColors.text,
                           ),
                         ),
                       ),
@@ -462,13 +462,13 @@ class _EntryRow extends ConsumerWidget {
                     child: VIcon(
                       'eye',
                       size: 17,
-                      color: isHidden ? VaultColors.purple : const Color(0xFF4A5058),
+                      color: isHidden ? VaultColors.purple : VaultColors.subtle,
                     ),
                   ),
                 ),
               ),
             const SizedBox(width: 4),
-            const VIcon('chevron', size: 16, color: Color(0xFF3A3F46)),
+            VIcon('chevron', size: 16, color: VaultColors.chevron),
           ],
         ),
       ),
@@ -488,7 +488,7 @@ class _EntryRow extends ConsumerWidget {
   }
 
   Color _tileColor(bool isHidden) {
-    if (isHidden) return const Color(0xFF8E7CC3);
+    if (isHidden) return VaultColors.purpleDeep;
     return switch (entry.kind) {
       FileKind.folder => VaultColors.blue,
       FileKind.image => VaultColors.green,
@@ -533,7 +533,7 @@ class _FilterMenuItem extends StatelessWidget {
       children: [
         VIcon(icon, size: 17, color: color),
         const SizedBox(width: 10),
-        Text(label, style: const TextStyle(fontSize: 13.5, color: VaultColors.text)),
+        Text(label, style: TextStyle(fontSize: 13.5, color: VaultColors.text)),
       ],
     );
   }

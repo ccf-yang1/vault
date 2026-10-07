@@ -10,16 +10,16 @@ class VaultCard extends StatelessWidget {
     required this.children,
     this.padding = EdgeInsets.zero,
     this.margin = const EdgeInsets.symmetric(horizontal: 16),
-    this.borderColor = VaultColors.line,
-    this.background = VaultColors.field,
+    this.borderColor,
+    this.background,
     super.key,
   });
 
   final List<Widget> children;
   final EdgeInsetsGeometry padding;
   final EdgeInsetsGeometry margin;
-  final Color borderColor;
-  final Color background;
+  final Color? borderColor;
+  final Color? background;
 
   @override
   Widget build(BuildContext context) {
@@ -27,9 +27,9 @@ class VaultCard extends StatelessWidget {
       margin: margin,
       padding: padding,
       decoration: BoxDecoration(
-        color: background,
+        color: background ?? VaultColors.field,
         borderRadius: BorderRadius.circular(VaultRadius.card),
-        border: Border.all(color: borderColor),
+        border: Border.all(color: borderColor ?? VaultColors.line),
       ),
       child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: children),
     );
@@ -46,7 +46,7 @@ class SectionTitle extends StatelessWidget {
         padding: const EdgeInsets.fromLTRB(22, 14, 22, 8),
         child: Text(
           text,
-          style: const TextStyle(
+          style: TextStyle(
             fontSize: 11.5,
             color: VaultColors.dim,
             letterSpacing: 0.7,
@@ -61,7 +61,7 @@ class IconBtn extends StatelessWidget {
   const IconBtn({
     required this.icon,
     this.onTap,
-    this.color = VaultColors.muted,
+    this.color,
     this.size = 19,
     this.tooltip,
     super.key,
@@ -69,7 +69,7 @@ class IconBtn extends StatelessWidget {
 
   final String icon;
   final VoidCallback? onTap;
-  final Color color;
+  final Color? color;
   final double size;
   final String? tooltip;
 
@@ -81,7 +81,7 @@ class IconBtn extends StatelessWidget {
       child: SizedBox(
         width: 36,
         height: 36,
-        child: Center(child: VIcon(icon, size: size, color: color)),
+        child: Center(child: VIcon(icon, size: size, color: color ?? VaultColors.muted)),
       ),
     );
     return tooltip == null ? button : Tooltip(message: tooltip!, child: button);
@@ -159,11 +159,11 @@ class PrimaryButton extends StatelessWidget {
 }
 
 class GhostButton extends StatelessWidget {
-  const GhostButton({required this.label, this.onPressed, this.color = const Color(0xFF9AA0A8), super.key});
+  const GhostButton({required this.label, this.onPressed, this.color, super.key});
 
   final String label;
   final VoidCallback? onPressed;
-  final Color color;
+  final Color? color;
 
   @override
   Widget build(BuildContext context) {
@@ -177,7 +177,7 @@ class GhostButton extends StatelessWidget {
           borderRadius: BorderRadius.circular(12),
           border: Border.all(color: VaultColors.line2),
         ),
-        child: Text(label, style: TextStyle(fontSize: 13.5, color: color)),
+        child: Text(label, style: TextStyle(fontSize: 13.5, color: color ?? VaultColors.muted)),
       ),
     );
   }
@@ -225,7 +225,7 @@ class VaultTextField extends StatelessWidget {
           padding: const EdgeInsets.only(left: 2, bottom: 7),
           child: Text(
             label,
-            style: const TextStyle(fontSize: 11.5, color: VaultColors.dim, letterSpacing: 0.25),
+            style: TextStyle(fontSize: 11.5, color: VaultColors.dim, letterSpacing: 0.25),
           ),
         ),
         Container(
@@ -253,13 +253,13 @@ class VaultTextField extends StatelessWidget {
                       autofillHints: autofillHints,
                       textInputAction: textInputAction ?? (onSubmitted == null ? TextInputAction.done : TextInputAction.next),
                       onSubmitted: onSubmitted,
-                      style: const TextStyle(fontSize: 13.5, color: Color(0xFFD6D9DE)),
+                      style: TextStyle(fontSize: 13.5, color: VaultColors.text),
                       decoration: InputDecoration(
                         isDense: true,
                         border: InputBorder.none,
                         contentPadding: EdgeInsets.zero,
                         hintText: placeholder,
-                        hintStyle: const TextStyle(fontSize: 13.5, color: Color(0xFF4A5058)),
+                        hintStyle: TextStyle(fontSize: 13.5, color: VaultColors.subtle),
                       ),
                     ),
                   ),
@@ -270,9 +270,9 @@ class VaultTextField extends StatelessWidget {
                         controller.clear();
                         onCleared?.call();
                       },
-                      child: const Padding(
+                      child: Padding(
                         padding: EdgeInsets.only(left: 8),
-                        child: VIcon('close', size: 15, color: Color(0xFF4A5058)),
+                        child: VIcon('close', size: 15, color: VaultColors.subtle),
                       ),
                     ),
                 ],
@@ -316,9 +316,9 @@ class ToggleRow extends StatelessWidget {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text(title, style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w500, color: Color(0xFFD6D9DE))),
+                Text(title, style: TextStyle(fontSize: 13, fontWeight: FontWeight.w500, color: VaultColors.text)),
                 const SizedBox(height: 3),
-                Text(subtitle, style: const TextStyle(fontSize: 11, color: VaultColors.dim, height: 1.5)),
+                Text(subtitle, style: TextStyle(fontSize: 11, color: VaultColors.dim, height: 1.5)),
               ],
             ),
           ),
@@ -358,7 +358,7 @@ class VaultSwitch extends StatelessWidget {
               width: 19,
               height: 19,
               decoration: BoxDecoration(
-                color: value ? Colors.white : const Color(0xFF7C838C),
+                color: value ? Colors.white : VaultColors.muted,
                 shape: BoxShape.circle,
               ),
             ),
@@ -417,7 +417,7 @@ class VaultBottomBar extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Container(
-      decoration: const BoxDecoration(
+      decoration: BoxDecoration(
         color: Color(0xF0121417),
         border: Border(top: BorderSide(color: VaultColors.line)),
       ),
@@ -481,12 +481,12 @@ void showVaultToast(BuildContext context, String message, {bool error = false}) 
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
         content: Row(
           children: [
-            VIcon(error ? 'shield' : 'check', size: 15, color: error ? const Color(0xFFE0736A) : VaultColors.green),
+            VIcon(error ? 'shield' : 'check', size: 15, color: error ? VaultColors.danger : VaultColors.green),
             const SizedBox(width: 9),
             Expanded(
               child: Text(
                 message,
-                style: TextStyle(fontSize: 12.5, color: error ? const Color(0xFFF0C6C2) : VaultColors.text, height: 1.45),
+                style: TextStyle(fontSize: 12.5, color: error ? VaultColors.dangerSoft : VaultColors.text, height: 1.45),
               ),
             ),
           ],
@@ -528,11 +528,11 @@ class VaultAppBar extends StatelessWidget implements PreferredSizeWidget {
               mainAxisAlignment: MainAxisAlignment.center,
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text(title, style: const TextStyle(fontSize: 17, fontWeight: FontWeight.w600, color: Color(0xFFEDEEF0))),
+                Text(title, style: TextStyle(fontSize: 17, fontWeight: FontWeight.w600, color: VaultColors.textBright)),
                 if (subtitle != null)
                   Padding(
                     padding: const EdgeInsets.only(top: 1),
-                    child: Text(subtitle!, style: const TextStyle(fontSize: 10.5, color: VaultColors.dim)),
+                    child: Text(subtitle!, style: TextStyle(fontSize: 10.5, color: VaultColors.dim)),
                   ),
               ],
             ),
@@ -561,9 +561,9 @@ class VaultEmpty extends StatelessWidget {
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            VIcon(icon, size: 30, color: const Color(0xFF3A3F46)),
+            VIcon(icon, size: 30, color: VaultColors.chevron),
             const SizedBox(height: 14),
-            Text(title, textAlign: TextAlign.center, style: const TextStyle(fontSize: 13, color: VaultColors.muted)),
+            Text(title, textAlign: TextAlign.center, style: TextStyle(fontSize: 13, color: VaultColors.muted)),
             if (action != null) ...[const SizedBox(height: 18), action!],
           ],
         ),

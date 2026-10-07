@@ -147,30 +147,47 @@ class HiddenEntry {
       );
 }
 
+/// 主题模式：深色为默认，逐字节沿用既有配色；深蓝蓝本取自音频播放页。
+enum VaultThemeMode {
+  dark('深色'),
+  light('浅色'),
+  deepBlue('深蓝');
+
+  const VaultThemeMode(this.label);
+  final String label;
+
+  static VaultThemeMode fromName(String? name) =>
+      values.firstWhere((m) => m.name == name, orElse: () => dark);
+}
+
 class AppSettings {
   const AppSettings({
     this.preloadEnabled = true,
     this.cacheLimitMB = 500,
     this.wifiOnlyUpload = false,
     this.recentDays = 7,
+    this.themeMode = VaultThemeMode.dark,
   });
 
   final bool preloadEnabled;
   final int cacheLimitMB;
   final bool wifiOnlyUpload;
   final int recentDays;
+  final VaultThemeMode themeMode;
 
   AppSettings copyWith({
     bool? preloadEnabled,
     int? cacheLimitMB,
     bool? wifiOnlyUpload,
     int? recentDays,
+    VaultThemeMode? themeMode,
   }) =>
       AppSettings(
         preloadEnabled: preloadEnabled ?? this.preloadEnabled,
         cacheLimitMB: cacheLimitMB ?? this.cacheLimitMB,
         wifiOnlyUpload: wifiOnlyUpload ?? this.wifiOnlyUpload,
         recentDays: recentDays ?? this.recentDays,
+        themeMode: themeMode ?? this.themeMode,
       );
 }
 

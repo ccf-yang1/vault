@@ -196,7 +196,7 @@ class _VideoPageState extends ConsumerState<VideoPage> {
     if (_loading) {
       return Column(
         mainAxisAlignment: MainAxisAlignment.center,
-        children: const [
+        children: [
           SizedBox(
             width: 26,
             height: 26,
@@ -218,7 +218,7 @@ class _VideoPageState extends ConsumerState<VideoPage> {
             Text(
               _error ?? '无法播放',
               textAlign: TextAlign.center,
-              style: const TextStyle(fontSize: 13, color: VaultColors.muted, height: 1.6),
+              style: TextStyle(fontSize: 13, color: VaultColors.muted, height: 1.6),
             ),
             const SizedBox(height: 20),
             GhostButton(label: '重 试', onPressed: () => setState(() => _open())),
@@ -283,7 +283,7 @@ class _VideoPageState extends ConsumerState<VideoPage> {
             Padding(
               padding: const EdgeInsets.only(bottom: 6),
               child: Text('跳到 ${formatDuration(position)} / ${formatDuration(total)}',
-                  style: const TextStyle(fontSize: 11.5, color: VaultColors.accent)),
+                  style: TextStyle(fontSize: 11.5, color: VaultColors.accent)),
             ),
           Row(
             children: [
@@ -338,7 +338,7 @@ class _VideoPageState extends ConsumerState<VideoPage> {
             ],
           ),
           const SizedBox(height: 2),
-          const Text(
+          Text(
             '拖动进度条可快进 / 快退',
             style: TextStyle(fontSize: 10.5, color: VaultColors.dim),
           ),

@@ -88,17 +88,17 @@ class _MediaFilterPageState extends ConsumerState<MediaFilterPage> {
                 ),
                 child: Row(
                   children: [
-                    const VIcon('search', size: 16, color: VaultColors.dim),
+                    VIcon('search', size: 16, color: VaultColors.dim),
                     const SizedBox(width: 8),
                     Expanded(
                       child: TextField(
                         controller: _search,
-                        style: const TextStyle(fontSize: 13.5, color: VaultColors.text),
+                        style: TextStyle(fontSize: 13.5, color: VaultColors.text),
                         decoration: InputDecoration(
                           isDense: true,
                           border: InputBorder.none,
                           hintText: '在结果里按名称搜索',
-                          hintStyle: const TextStyle(fontSize: 13.5, color: VaultColors.dim),
+                          hintStyle: TextStyle(fontSize: 13.5, color: VaultColors.dim),
                         ),
                         onChanged: (_) => setState(() {}),
                       ),
@@ -187,27 +187,27 @@ class _MediaFilterPageState extends ConsumerState<MediaFilterPage> {
                     entry.name,
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
-                    style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w500, color: Color(0xFFE4E6E9)),
+                    style: TextStyle(fontSize: 14, fontWeight: FontWeight.w500, color: VaultColors.text),
                   ),
                   const SizedBox(height: 2),
                   Text(
                     base,
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
-                    style: const TextStyle(fontSize: 11.5, color: VaultColors.muted),
+                    style: TextStyle(fontSize: 11.5, color: VaultColors.muted),
                   ),
                   if (dir != '/')
                     Text(
                       dir,
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
-                      style: const TextStyle(fontSize: 10.5, color: VaultColors.dim),
+                      style: TextStyle(fontSize: 10.5, color: VaultColors.dim),
                     ),
                 ],
               ),
             ),
             const SizedBox(width: 4),
-            const VIcon('chevron', size: 16, color: Color(0xFF3A3F46)),
+            VIcon('chevron', size: 16, color: VaultColors.chevron),
           ],
         ),
       ),
@@ -220,7 +220,7 @@ class _Scanning extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return const Center(
+    return Center(
       child: Column(
         mainAxisAlignment: MainAxisAlignment.center,
         children: [

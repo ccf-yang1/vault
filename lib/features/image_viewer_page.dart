@@ -117,7 +117,7 @@ class _ImageViewerPageState extends ConsumerState<ImageViewerPage> {
   Widget _bottomBar(List<RemoteEntry> images) {
     final cached = _cached.length;
     return Container(
-      decoration: const BoxDecoration(
+      decoration: BoxDecoration(
         border: Border(top: BorderSide(color: VaultColors.line)),
         color: Color(0xF0121417),
       ),
@@ -130,11 +130,11 @@ class _ImageViewerPageState extends ConsumerState<ImageViewerPage> {
               padding: const EdgeInsets.fromLTRB(16, 10, 16, 6),
               child: Row(
                 children: [
-                  const VIcon('cloudUp', size: 13, color: VaultColors.green),
+                  VIcon('cloudUp', size: 13, color: VaultColors.green),
                   const SizedBox(width: 6),
                   Text(
                     '预加载 $cached / ${images.length}',
-                    style: const TextStyle(fontSize: 11, color: VaultColors.green, letterSpacing: 0.2),
+                    style: TextStyle(fontSize: 11, color: VaultColors.green, letterSpacing: 0.2),
                   ),
                   const Spacer(),
                   SizedBox(
@@ -145,7 +145,7 @@ class _ImageViewerPageState extends ConsumerState<ImageViewerPage> {
                         value: images.isEmpty ? 0 : cached / images.length,
                         minHeight: 3,
                         backgroundColor: VaultColors.surface2,
-                        valueColor: const AlwaysStoppedAnimation(VaultColors.green),
+                        valueColor: AlwaysStoppedAnimation(VaultColors.green),
                       ),
                     ),
                   ),
@@ -207,12 +207,12 @@ class _ImageViewerPageState extends ConsumerState<ImageViewerPage> {
             mainAxisSize: MainAxisSize.min,
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Text(entry.name, style: const TextStyle(fontSize: 14, color: VaultColors.text, fontWeight: FontWeight.w600)),
+              Text(entry.name, style: TextStyle(fontSize: 14, color: VaultColors.text, fontWeight: FontWeight.w600)),
               const SizedBox(height: 10),
-              Text('路径  ${entry.path}', style: const TextStyle(fontSize: 12, color: VaultColors.muted, height: 1.6)),
+              Text('路径  ${entry.path}', style: TextStyle(fontSize: 12, color: VaultColors.muted, height: 1.6)),
               Text(
                 '大小  ${entry.size > 0 ? formatBytes(entry.size) : '未知'}',
-                style: const TextStyle(fontSize: 12, color: VaultColors.muted, height: 1.6),
+                style: TextStyle(fontSize: 12, color: VaultColors.muted, height: 1.6),
               ),
             ],
           ),
@@ -250,7 +250,7 @@ class _ImagePageState extends ConsumerState<_ImagePage> {
   Widget build(BuildContext context) {
     final file = ref.watch(cachedFileProvider(cacheKeyFor(widget.entry)));
     return file.when(
-      loading: () => const Center(
+      loading: () => Center(
         child: SizedBox(
           width: 24,
           height: 24,
@@ -263,7 +263,7 @@ class _ImagePageState extends ConsumerState<_ImagePage> {
           child: Text(
             error is WebDavError ? error.message : '读取失败，下拉重试',
             textAlign: TextAlign.center,
-            style: const TextStyle(fontSize: 12.5, color: VaultColors.dim),
+            style: TextStyle(fontSize: 12.5, color: VaultColors.dim),
           ),
         ),
       ),
