@@ -51,46 +51,26 @@ void main() {
     });
   });
 
-  group('落点候选：隐私优先', () {
+  group('落点候选：账号隔离 + 隐私优先', () {
     const both = ['local', 'common'];
 
-    test('家庭实例（:15244）永远不列 local', () {
-      expect(
-        cacheTargetsFor(instance: BoxInstance.family, hiddenMode: false, available: both),
-        ['common'],
-      );
-      expect(
-        cacheTargetsFor(instance: BoxInstance.family, hiddenMode: true, available: both),
-        ['common'],
-      );
+    test('连 :5244 只给 local，不列出别的账号的落点', () {
+      expect(cacheTargetsFor(instance: BoxInstance.priv, available: both), ['local']);
+      expect(cacheTargetsFor(instance: BoxInstance.priv, available: ['common', 'local']), ['local']);
     });
 
-    test('私人实例开着隐藏模式时不给选，直接用 local', () {
-      expect(
-        cacheTargetsFor(instance: BoxInstance.priv, hiddenMode: true, available: both),
-        ['local'],
-      );
+    test('连 :15244 只给 common，永远不列 local', () {
+      expect(cacheTargetsFor(instance: BoxInstance.family, available: both), ['common']);
     });
 
-    test('私人实例没开隐藏模式时两个都列出来', () {
-      expect(
-        cacheTargetsFor(instance: BoxInstance.priv, hiddenMode: false, available: both),
-        both,
-      );
+    test('这个账号对应的落点盒子上没配时不给候选，而不是塞一个别的盘的', () {
+      expect(cacheTargetsFor(instance: BoxInstance.priv, available: ['media', 'common']), isEmpty);
+      expect(cacheTargetsFor(instance: BoxInstance.family, available: ['local']), isEmpty);
     });
 
-    test('端口认不出来就照盒子给的列（隐藏模式也不吞落点）', () {
-      expect(
-        cacheTargetsFor(instance: BoxInstance.unknown, hiddenMode: true, available: ['media']),
-        ['media'],
-      );
-    });
-
-    test('盒子给的落点里没有 local 时，隐私模式退回列出的第一个', () {
-      expect(
-        cacheTargetsFor(instance: BoxInstance.priv, hiddenMode: true, available: ['media', 'common']),
-        ['media'],
-      );
+    test('端口认不出来就照盒子给的列（没法判断归属，不替用户猜）', () {
+      expect(cacheTargetsFor(instance: BoxInstance.unknown, available: both), both);
+      expect(cacheTargetsFor(instance: BoxInstance.unknown, available: ['media']), ['media']);
     });
 
     test('端口映射到实例：5244 私人、15244 家庭、其它认不出', () {
@@ -98,6 +78,18 @@ void main() {
       expect(BoxInstance.fromPort(15244), BoxInstance.family);
       expect(BoxInstance.fromPort(80), BoxInstance.unknown);
       expect(BoxInstance.fromPort(null), BoxInstance.unknown);
+    });
+
+    test('local 被藏起来就不点名 —— 隐藏模式开着，或它自己在隐藏目录里', () {
+      expect(cacheTargetIsQuiet(to: 'local', hiddenMode: true, targetHidden: false), isTrue);
+      expect(cacheTargetIsQuiet(to: 'local', hiddenMode: false, targetHidden: true), isTrue);
+      expect(cacheTargetIsQuiet(to: 'local', hiddenMode: true, targetHidden: true), isTrue);
+      expect(cacheTargetIsQuiet(to: 'local', hiddenMode: false, targetHidden: false), isFalse);
+    });
+
+    test('家庭那份是共用的，任何时候都照常点名', () {
+      expect(cacheTargetIsQuiet(to: 'common', hiddenMode: true, targetHidden: true), isFalse);
+      expect(cacheTargetIsQuiet(to: 'media', hiddenMode: true, targetHidden: true), isFalse);
     });
 
     test('落点显示名不出现「私人」', () {

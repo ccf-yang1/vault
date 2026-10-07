@@ -376,22 +376,36 @@ enum BoxInstance {
       };
 }
 
-/// 落点候选，按隐私取舍：
-/// - 家庭实例不列 `local` —— 那份盘和隐私空间无关，列出来只会让人误判内容被藏进了私人份；
-/// - 私人实例开着隐藏模式时**不给选**，直接用 `local`，界面上不出现「/local」这类
-///   把内容和隐私空间对应起来的字样（用户要的就是「只说下载到盒子」）。
+/// 落点候选：**只给当前账号那一份盘**。
+///
+/// 盒子端接口不看 OpenList 账号，`to` 想指哪个 remote 都指得动；但 App 里
+/// 「连的是哪个实例」就是用户的账号边界 —— 在 `:5244` 的会话里列出 `:15244` 的落点，
+/// 等于把另一份盘的名字和存在一起说出去了。想缓存家庭那份，就切到那个账号再做。
+/// 端口认不出来（反代、改过端口）时无法判断归属，只能照盒子给的列。
 List<String> cacheTargetsFor({
   required BoxInstance instance,
-  required bool hiddenMode,
   required List<String> available,
 }) {
-  if (instance == BoxInstance.family) return [for (final t in available) if (t != 'local') t];
-  if (instance == BoxInstance.priv && hiddenMode) {
-    if (available.isEmpty) return const [];
-    return available.contains('local') ? const ['local'] : [available.first];
-  }
-  return available;
+  final own = switch (instance) {
+    BoxInstance.priv => 'local',
+    BoxInstance.family => 'common',
+    BoxInstance.unknown => null,
+  };
+  if (own == null) return available;
+  return available.contains(own) ? [own] : const [];
 }
+
+/// 这个落点要不要对用户一字不提。
+///
+/// `local` 就是拿来当隐私空间的那份盘，所以判断标准是**它此刻在浏览页里看不看得着**：
+/// 开着隐藏模式，或者它自己被列进了隐藏目录（退出隐藏模式也看不着）—— 两种都不说它是
+/// 谁家的，只说会下载到盒子，直接下。`common` 是全家共用那份，永远照常显示。
+bool cacheTargetIsQuiet({
+  required String to,
+  required bool hiddenMode,
+  required bool targetHidden,
+}) =>
+    to == 'local' && (hiddenMode || targetHidden);
 
 /// 落点是盒子侧的目录名；界面文案一律不出现「私人」，隐私空间的那份只说「盒子盘」。
 String cacheTargetLabel(String to) => switch (to) {

@@ -156,10 +156,10 @@ class _OfflineDownloadDialogState extends ConsumerState<OfflineDownloadDialog> {
   _Phase _phase = _Phase.probing;
   List<String> _targets = const [];
 
-  /// 只有一个落点（或隐私模式下不给选）时不显示单选。
+  /// 只有一个落点（或这份盘不该点名）时不显示单选。
   bool _pick = false;
 
-  /// true = 私人实例开着隐藏模式：界面上一个字都不提 `/local`，只说「下载到盒子」。
+  /// true = 界面上一个字都不提这个落点是谁家的，只说「下载到盒子」。
   bool _silent = false;
   String? _to;
   CacheEstimate? _estimate;
@@ -178,9 +178,14 @@ class _OfflineDownloadDialogState extends ConsumerState<OfflineDownloadDialog> {
     return BoxInstance.fromPort(uri == null || !uri.hasPort ? null : uri.port);
   }
 
+  bool _quietFor(String to) => cacheTargetIsQuiet(
+        to: to,
+        hiddenMode: ref.read(hiddenModeProvider),
+        targetHidden: ref.read(hiddenDirsProvider.notifier).isHidden('/$to'),
+      );
+
   Future<void> _probe() async {
     final api = ref.read(boxCacheProvider);
-    final hiddenMode = ref.read(hiddenModeProvider);
     try {
       final health = await api.health();
       if (!mounted) return;
@@ -191,22 +196,23 @@ class _OfflineDownloadDialogState extends ConsumerState<OfflineDownloadDialog> {
         });
         return;
       }
-      final targets = cacheTargetsFor(instance: _instance, hiddenMode: hiddenMode, available: health.targets);
+      final targets = cacheTargetsFor(instance: _instance, available: health.targets);
       if (targets.isEmpty) {
         setState(() {
           _phase = _Phase.boxError;
-          _message = '这个实例没有可用的缓存落点。';
+          _message = '当前这个账号在盒子上没有对应的缓存落点，所以没法从这里提交。';
         });
         return;
       }
+      final to = targets.first;
       setState(() {
-        _silent = _instance == BoxInstance.priv && hiddenMode;
+        _silent = _quietFor(to);
         _targets = targets;
         _pick = !_silent && targets.length > 1;
-        _to = targets.first;
+        _to = to;
         _phase = _Phase.ready;
       });
-      await _estimateFor(targets.first);
+      await _estimateFor(to);
     } on BoxCacheError catch (e) {
       if (!mounted) return;
       setState(() {
@@ -220,6 +226,7 @@ class _OfflineDownloadDialogState extends ConsumerState<OfflineDownloadDialog> {
   Future<void> _estimateFor(String to) async {
     setState(() {
       _to = to;
+      _silent = _quietFor(to);
       _estimate = null;
       _estimating = true;
     });
@@ -355,7 +362,7 @@ class _OfflineDownloadDialogState extends ConsumerState<OfflineDownloadDialog> {
           ],
       };
 
-  /// 允许露出落点时（隐藏模式没开、或连的本来就是家庭实例）带上挂载路径，方便事后去找那份副本。
+  /// 点名落点时才带上挂载路径，方便事后去找那份副本。
   static String _targetLabel(String to) {
     final hint = switch (to) {
       'local' => ':5244 的 /local',
