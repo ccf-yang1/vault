@@ -163,11 +163,16 @@ class _CacheTasksPageState extends ConsumerState<CacheTasksPage> {
           ),
           const SizedBox(height: 9),
           Text(_summary(record), style: TextStyle(fontSize: 11.5, color: VaultColors.muted, height: 1.55)),
-          if (record.error != null && record.state == CacheState.failed) ...[
+          if (record.error != null && record.state != CacheState.done) ...[
             const SizedBox(height: 6),
             Text(
               record.error!,
-              style: TextStyle(fontSize: 11.5, color: VaultColors.dangerSoft, height: 1.55),
+              style: TextStyle(
+                // 失败用红色；被取消/被打断只是「停下来」，语气要平一些。
+                fontSize: 11.5,
+                color: record.state == CacheState.failed ? VaultColors.dangerSoft : VaultColors.muted,
+                height: 1.55,
+              ),
             ),
           ],
           if (notice != null) ...[
@@ -178,7 +183,7 @@ class _CacheTasksPageState extends ConsumerState<CacheTasksPage> {
           Row(
             children: [
               Text(
-                '${_targetLabel(record.to)} · ${formatRelativeTime(DateTime.fromMillisecondsSinceEpoch(record.createdAt * 1000))}提交',
+                '${cacheTargetLabel(record.to)} · ${formatRelativeTime(DateTime.fromMillisecondsSinceEpoch(record.createdAt * 1000))}提交',
                 style: TextStyle(fontSize: 11, color: VaultColors.dim),
               ),
               const Spacer(),
@@ -214,14 +219,15 @@ class _CacheTasksPageState extends ConsumerState<CacheTasksPage> {
       final minutes = (record.etaS! / 60).ceil();
       parts.add(minutes <= 1 ? '约 1 分钟内' : '约 $minutes 分钟');
     }
-    return parts.join(' · ');
+    // 这三种状态用户最容易误判：排队不是卡死，打断/取消也不是白跑。
+    final hint = switch (state) {
+      CacheState.queued => ' —— 盒子同时只跑一个同步，前面的（或管理员手工跑的）让出锁才轮到这条',
+      CacheState.interrupted => ' —— 盒子重启打断的，重新提交同一个目录会接着传，已落盘的不用重下',
+      CacheState.canceled => ' —— 已落盘的部分留着，重新提交同一个目录会接着传',
+      _ => '',
+    };
+    return '${parts.join(' · ')}$hint';
   }
-
-  static String _targetLabel(String to) => switch (to) {
-        'local' => '私人盘',
-        'common' => '家庭盘',
-        _ => to,
-      };
 }
 
 class _StatePill extends StatelessWidget {

@@ -51,6 +51,62 @@ void main() {
     });
   });
 
+  group('落点候选：隐私优先', () {
+    const both = ['local', 'common'];
+
+    test('家庭实例（:15244）永远不列 local', () {
+      expect(
+        cacheTargetsFor(instance: BoxInstance.family, hiddenMode: false, available: both),
+        ['common'],
+      );
+      expect(
+        cacheTargetsFor(instance: BoxInstance.family, hiddenMode: true, available: both),
+        ['common'],
+      );
+    });
+
+    test('私人实例开着隐藏模式时不给选，直接用 local', () {
+      expect(
+        cacheTargetsFor(instance: BoxInstance.priv, hiddenMode: true, available: both),
+        ['local'],
+      );
+    });
+
+    test('私人实例没开隐藏模式时两个都列出来', () {
+      expect(
+        cacheTargetsFor(instance: BoxInstance.priv, hiddenMode: false, available: both),
+        both,
+      );
+    });
+
+    test('端口认不出来就照盒子给的列（隐藏模式也不吞落点）', () {
+      expect(
+        cacheTargetsFor(instance: BoxInstance.unknown, hiddenMode: true, available: ['media']),
+        ['media'],
+      );
+    });
+
+    test('盒子给的落点里没有 local 时，隐私模式退回列出的第一个', () {
+      expect(
+        cacheTargetsFor(instance: BoxInstance.priv, hiddenMode: true, available: ['media', 'common']),
+        ['media'],
+      );
+    });
+
+    test('端口映射到实例：5244 私人、15244 家庭、其它认不出', () {
+      expect(BoxInstance.fromPort(5244), BoxInstance.priv);
+      expect(BoxInstance.fromPort(15244), BoxInstance.family);
+      expect(BoxInstance.fromPort(80), BoxInstance.unknown);
+      expect(BoxInstance.fromPort(null), BoxInstance.unknown);
+    });
+
+    test('落点显示名不出现「私人」', () {
+      expect(cacheTargetLabel('local'), '盒子盘');
+      expect(cacheTargetLabel('common'), '家庭盘');
+      expect(cacheTargetLabel('media'), 'media');
+    });
+  });
+
   group('任务解析：字段全部按可缺失处理', () {
     test('进度字段一个都没给也不崩，state 照常解析', () {
       final task = CacheTask.fromJson({
@@ -130,8 +186,8 @@ void main() {
       expect(BoxCacheError(400, 'bad_src', '目录名不合法').humanMessage, '目录名不合法');
     });
 
-    test('客户端超时不能算失败，提示去任务列表查', () {
-      expect(BoxCacheError(0, 'client_timeout', '').humanMessage, contains('别重复提交'));
+    test('客户端超时不能算失败，要给出「再点一次会自动跟踪」的出路', () {
+      expect(BoxCacheError(0, 'client_timeout', '').humanMessage, contains('再点一次「下载到盒子」'));
     });
   });
 }

@@ -205,7 +205,9 @@ class BoxCacheError implements Exception {
   String get humanMessage => message.isNotEmpty
       ? message
       : switch (code) {
-          'client_timeout' => '盒子很久没回话，但任务多半已经提交上了。先去设置的任务列表点「查询状态」，别重复提交。',
+          'client_timeout' => '盒子很久没回话，但任务多半已经建上了。超时时 App 没拿到任务号，'
+              '所以列表里不会有这条 —— 再点一次「下载到盒子」即可：'
+              '如果盒子那边真在跑，会回「已在进行」并自动转去跟踪那个任务。',
           'connect_timeout' => '连不上盒子的缓存服务（:9000）。确认手机和盒子在同一个局域网。',
           'network' => '连不上盒子的缓存服务（:9000）。确认手机和盒子在同一个局域网。',
           'not_found' => '没找到缓存服务接口，地址或前缀不对。',
@@ -358,6 +360,45 @@ String cacheSubFor(String src) {
   final trimmed = src.endsWith('/') ? src.substring(0, src.length - 1) : src;
   return trimmed.replaceAll('/', '__').replaceAll(RegExp(r'''["'`$\\]'''), '_');
 }
+
+/// 盒子上跑的两个 OpenList 实例。落点名字是盒子侧的目录名，但**在 App 里含义不同**：
+/// `local` 是私人那份、有隐藏模式；`common` 是全家共用的那份、永远没有隐藏空间。
+enum BoxInstance {
+  priv,
+  family,
+  /// 端口对不上（反代、别的主机）：只能照盒子给了什么落点就列什么。
+  unknown;
+
+  static BoxInstance fromPort(int? port) => switch (port) {
+        5244 => BoxInstance.priv,
+        15244 => BoxInstance.family,
+        _ => BoxInstance.unknown,
+      };
+}
+
+/// 落点候选，按隐私取舍：
+/// - 家庭实例不列 `local` —— 那份盘和隐私空间无关，列出来只会让人误判内容被藏进了私人份；
+/// - 私人实例开着隐藏模式时**不给选**，直接用 `local`，界面上不出现「/local」这类
+///   把内容和隐私空间对应起来的字样（用户要的就是「只说下载到盒子」）。
+List<String> cacheTargetsFor({
+  required BoxInstance instance,
+  required bool hiddenMode,
+  required List<String> available,
+}) {
+  if (instance == BoxInstance.family) return [for (final t in available) if (t != 'local') t];
+  if (instance == BoxInstance.priv && hiddenMode) {
+    if (available.isEmpty) return const [];
+    return available.contains('local') ? const ['local'] : [available.first];
+  }
+  return available;
+}
+
+/// 落点是盒子侧的目录名；界面文案一律不出现「私人」，隐私空间的那份只说「盒子盘」。
+String cacheTargetLabel(String to) => switch (to) {
+      'local' => '盒子盘',
+      'common' => '家庭盘',
+      _ => to,
+    };
 
 class BoxCacheApi {
   BoxCacheApi(this.baseUrl);

@@ -155,6 +155,12 @@ class OfflineDownloadDialog extends ConsumerStatefulWidget {
 class _OfflineDownloadDialogState extends ConsumerState<OfflineDownloadDialog> {
   _Phase _phase = _Phase.probing;
   List<String> _targets = const [];
+
+  /// 只有一个落点（或隐私模式下不给选）时不显示单选。
+  bool _pick = false;
+
+  /// true = 私人实例开着隐藏模式：界面上一个字都不提 `/local`，只说「下载到盒子」。
+  bool _silent = false;
   String? _to;
   CacheEstimate? _estimate;
   bool _estimating = false;
@@ -166,8 +172,15 @@ class _OfflineDownloadDialogState extends ConsumerState<OfflineDownloadDialog> {
     WidgetsBinding.instance.addPostFrameCallback((_) => _probe());
   }
 
+  /// 当前连的是哪个实例，只看端口：5244 是私人那份（有隐藏模式），15244 是家庭那份。
+  BoxInstance get _instance {
+    final uri = Uri.tryParse(ref.read(connectionConfigProvider)?.baseUrl ?? '');
+    return BoxInstance.fromPort(uri == null || !uri.hasPort ? null : uri.port);
+  }
+
   Future<void> _probe() async {
     final api = ref.read(boxCacheProvider);
+    final hiddenMode = ref.read(hiddenModeProvider);
     try {
       final health = await api.health();
       if (!mounted) return;
@@ -178,20 +191,22 @@ class _OfflineDownloadDialogState extends ConsumerState<OfflineDownloadDialog> {
         });
         return;
       }
-      if (health.targets.isEmpty) {
+      final targets = cacheTargetsFor(instance: _instance, hiddenMode: hiddenMode, available: health.targets);
+      if (targets.isEmpty) {
         setState(() {
           _phase = _Phase.boxError;
-          _message = '盒子上没有可用的缓存落点目录。';
+          _message = '这个实例没有可用的缓存落点。';
         });
         return;
       }
-      final first = health.targets.first;
       setState(() {
-        _targets = health.targets;
-        _to = first;
+        _silent = _instance == BoxInstance.priv && hiddenMode;
+        _targets = targets;
+        _pick = !_silent && targets.length > 1;
+        _to = targets.first;
         _phase = _Phase.ready;
       });
-      await _estimateFor(first);
+      await _estimateFor(targets.first);
     } on BoxCacheError catch (e) {
       if (!mounted) return;
       setState(() {
@@ -258,8 +273,9 @@ class _OfflineDownloadDialogState extends ConsumerState<OfflineDownloadDialog> {
     if (_phase == _Phase.probing) return _busy('正在问盒子…');
     if (_phase == _Phase.submitting) {
       return _busy('正在提交。大目录服务端要先列一遍云端，最长可能等两分钟。\n\n'
-          '这期间别重复提交 —— 就算这里超时了，盒子那边多半照样把任务跑起来了，'
-          '可以去 设置 · 离线下载任务 里点「查询状态」确认。');
+          '这期间别重复提交 —— 就算这里超时了，盒子那边多半照样把任务跑起来了。'
+          '真超时了这里拿不到任务号、列表里也就不会有这条，'
+          '再点一次「下载到盒子」会自动转去跟踪那个已在跑的任务。');
     }
     if (_phase == _Phase.boxError || _Phase.submitError == _phase) {
       return Text(_message, style: TextStyle(fontSize: 13, color: VaultColors.muted, height: 1.6));
@@ -274,7 +290,9 @@ class _OfflineDownloadDialogState extends ConsumerState<OfflineDownloadDialog> {
         const SizedBox(height: 3),
         Text('云端目录：${widget.src}', style: TextStyle(fontSize: 11.5, color: VaultColors.dim)),
         const SizedBox(height: 10),
-        if (_targets.length > 1) ...[
+        if (_silent)
+          Text('缓存到：盒子的本地目录', style: TextStyle(fontSize: 12.5, color: VaultColors.muted))
+        else if (_pick) ...[
           Text('缓存到', style: TextStyle(fontSize: 12, color: VaultColors.muted)),
           for (final target in _targets)
             _TargetOption(
@@ -284,7 +302,7 @@ class _OfflineDownloadDialogState extends ConsumerState<OfflineDownloadDialog> {
             ),
           const SizedBox(height: 8),
         ] else
-          Text('缓存到：${_targetLabel(_to ?? 'local')}', style: TextStyle(fontSize: 12.5, color: VaultColors.muted)),
+          Text('缓存到：${_targetLabel(_to ?? '')}', style: TextStyle(fontSize: 12.5, color: VaultColors.muted)),
         const SizedBox(height: 10),
         Text(
           _estimating
@@ -337,11 +355,16 @@ class _OfflineDownloadDialogState extends ConsumerState<OfflineDownloadDialog> {
           ],
       };
 
-  static String _targetLabel(String to) => switch (to) {
-        'local' => '私人那份（:5244 的 /local）',
-        'common' => '家庭那份（:15244 的 /common）',
-        _ => to,
-      };
+  /// 允许露出落点时（隐藏模式没开、或连的本来就是家庭实例）带上挂载路径，方便事后去找那份副本。
+  static String _targetLabel(String to) {
+    final hint = switch (to) {
+      'local' => ':5244 的 /local',
+      'common' => ':15244 的 /common',
+      _ => '',
+    };
+    final name = cacheTargetLabel(to);
+    return hint.isEmpty ? name : '$name（$hint）';
+  }
 }
 
 /// 落点单选：跟主题页那种「一行一个候选」的观感一致，不用系统 Radio。
