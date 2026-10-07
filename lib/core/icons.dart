@@ -78,6 +78,8 @@ final Map<String, String> _svg = {
       '<circle cx="6.5" cy="12" r="1.1"/><circle cx="8.5" cy="7.5" r="1.1"/><circle cx="14.5" cy="7.5" r="1.1"/><circle cx="17" cy="11" r="1.1"/>', w: 1.6),
   'doc': _s('<path d="M14 3.5H7.5a2 2 0 0 0-2 2v13a2 2 0 0 0 2 2h9a2 2 0 0 0 2-2V8z"/>'
       '<path d="M14 3.5V8h4.5"/><path d="M9 13h6M9 16.5h6"/>', w: 1.7),
+  'fullscreen': _s('<path d="M4 9V4h5"/><path d="M20 9V4h-5"/><path d="M4 15v5h5"/><path d="M20 15v5h-5"/>', w: 1.9),
+  'exitFullscreen': _s('<path d="M9 4v5H4"/><path d="M15 4v5h5"/><path d="M9 20v-5H4"/><path d="M15 20v-5h5"/>', w: 1.9),
 };
 
 /// 与 ui.html 同源的单色图标。
