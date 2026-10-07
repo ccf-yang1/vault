@@ -106,9 +106,10 @@ class _VideoPageState extends ConsumerState<VideoPage> {
   }
 
   static String _friendly(String ext) => switch (ext) {
-        '.mkv' || '.avi' || '.flv' || '.wmv' || '.ts' =>
+        '.mkv' || '.avi' || '.flv' || '.wmv' || '.ts' || '.webm' || '.rmvb' || '.rm' ||
+        '.m2ts' || '.vob' || '.mpg' || '.mpeg' || '.mxf' || '.ogv' =>
           'iOS 自带播放器不支持 $ext，换成 MP4 / MOV 再试',
-        _ => '视频加载失败，可能是网络断开或服务器不允许 Range 请求',
+        _ => '视频打不开：可能是较大文件没下完（网络/服务器停顿），或该视频编码 iOS 解码不了。可点重试。',
       };
 
   void _onTick() {

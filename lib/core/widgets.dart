@@ -418,7 +418,7 @@ class VaultBottomBar extends StatelessWidget {
   Widget build(BuildContext context) {
     return Container(
       decoration: BoxDecoration(
-        color: Color(0xF0121417),
+        color: VaultColors.surface.withValues(alpha: 0.94),
         border: Border(top: BorderSide(color: VaultColors.line)),
       ),
       child: SafeArea(

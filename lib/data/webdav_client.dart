@@ -509,7 +509,13 @@ class WebDavClient {
         urlFor(path).toString(),
         destination,
         cancelToken: cancelToken,
-        options: _options(method: 'GET', responseType: ResponseType.stream),
+        options: _options(
+          method: 'GET',
+          responseType: ResponseType.stream,
+          // 整段下流给视频/音频用：云盘后端偶发停顿远超 30s，默认空闲超时会误杀，
+          // 与 Range 读流一致放宽到 _streamTimeout。
+          receiveTimeout: _streamTimeout,
+        ),
         onReceiveProgress: onProgress,
       );
     } on DioException catch (e) {
