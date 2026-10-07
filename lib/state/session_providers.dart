@@ -4,6 +4,7 @@ import 'dart:io';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../data/auth_proxy.dart';
+import '../data/box_cache_api.dart';
 import '../data/credential_store.dart';
 import '../data/prefs_repository.dart';
 import '../data/vault_cache.dart';
@@ -280,6 +281,45 @@ final proxyProvider = Provider<AuthProxy>((ref) {
   });
   return proxy;
 });
+
+/// 盒子云盘缓存服务（离线下载）。地址从当前连接的 WebDAV 地址推：同一台主机、
+/// 端口 9000、前缀 `/api/cache`；换盒子/改端口都不用再配第二遍。
+final boxCacheProvider = Provider<BoxCacheApi>((ref) {
+  final base = BoxCacheApi.deriveBaseUrl(ref.watch(connectionConfigProvider)?.baseUrl ?? '');
+  if (base == null) throw StateError('无法从连接地址推出盒子缓存服务');
+  return BoxCacheApi(base);
+});
+
+/// 离线下载任务列表：增删改都只动 App 本地记录，**不给盒子发请求**
+/// （用户要求：删除只是把这一行从任务栏里去掉，盒子那边的同步照跑）。
+class CacheTasksController extends Notifier<List<CacheTaskRecord>> {
+  /// 本地最多留这么多条，更早的自己清掉（盒子端也只留最近 200 条）。
+  static const maxKeep = 100;
+
+  @override
+  List<CacheTaskRecord> build() => ref.read(prefsProvider).loadCacheTasks();
+
+  Future<void> add(CacheTaskRecord record) async {
+    final next = [record, ...state.where((e) => e.id != record.id)];
+    await _write(next.length > maxKeep ? next.sublist(0, maxKeep) : next);
+  }
+
+  Future<void> update(CacheTaskRecord record) async {
+    await _write(state.map((e) => e.id == record.id ? record : e).toList());
+  }
+
+  Future<void> remove(String id) async {
+    await _write(state.where((e) => e.id != id).toList());
+  }
+
+  Future<void> _write(List<CacheTaskRecord> next) async {
+    await ref.read(prefsProvider).saveCacheTasks(next);
+    state = next;
+  }
+}
+
+final cacheTasksProvider =
+    NotifierProvider<CacheTasksController, List<CacheTaskRecord>>(CacheTasksController.new);
 
 class SettingsController extends Notifier<AppSettings> {
   @override

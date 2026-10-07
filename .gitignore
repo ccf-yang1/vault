@@ -8,3 +8,4 @@ android/
 .flutter-plugins-dependencies
 .env
 dev-notes.md
+doc/

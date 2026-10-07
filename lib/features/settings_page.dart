@@ -8,6 +8,7 @@ import '../core/theme.dart';
 import '../core/widgets.dart';
 import '../data/credential_store.dart';
 import '../state/session_providers.dart';
+import 'cache_tasks_page.dart';
 import 'connect_page.dart';
 import 'theme_page.dart';
 
@@ -111,6 +112,7 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
     final settings = ref.watch(settingsProvider);
     final hiddenMode = ref.watch(hiddenModeProvider);
     final hiddenDirs = ref.watch(hiddenDirsProvider);
+    final cacheTasks = ref.watch(cacheTasksProvider);
 
     return VaultAnnotatedRegion(
       child: Scaffold(
@@ -199,6 +201,36 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
                           Text(
                             settings.themeMode.label,
                             style: const TextStyle(fontSize: 12).copyWith(color: VaultColors.muted),
+                          ),
+                          const SizedBox(width: 4),
+                          VIcon('chevron', size: 15, color: VaultColors.chevron),
+                        ],
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+              const SectionTitle('离线下载'),
+              VaultCard(
+                padding: const EdgeInsets.fromLTRB(15, 2, 15, 2),
+                children: [
+                  GestureDetector(
+                    behavior: HitTestBehavior.opaque,
+                    onTap: () => Navigator.of(context).push(
+                      MaterialPageRoute(builder: (_) => const CacheTasksPage()),
+                    ),
+                    child: Padding(
+                      padding: const EdgeInsets.symmetric(vertical: 12),
+                      child: Row(
+                        children: [
+                          VIcon('download', size: 16, color: VaultColors.accent),
+                          const SizedBox(width: 11),
+                          Expanded(
+                            child: Text('任务列表', style: TextStyle(fontSize: 13, color: VaultColors.text)),
+                          ),
+                          Text(
+                            cacheTasks.isEmpty ? '浏览页长按目录提交' : '$cacheTasks 个任务',
+                            style: TextStyle(fontSize: 12, color: VaultColors.muted),
                           ),
                           const SizedBox(width: 4),
                           VIcon('chevron', size: 15, color: VaultColors.chevron),

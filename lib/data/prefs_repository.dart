@@ -3,6 +3,7 @@ import 'dart:convert';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import '../core/models.dart';
+import 'box_cache_api.dart';
 
 /// 设置与隐藏目录列表（需求 §5.2）。
 ///
@@ -13,6 +14,7 @@ class PrefsRepository {
   static const _settingsKey = 'vault.settings';
   static const _hiddenKey = 'vault.hidden_dirs';
   static const _draftKey = 'vault.draft';
+  static const _cacheTasksKey = 'vault.cache_tasks';
   /// 上传目标目录按账号各存各的：切账号时上传页才不会停在另一个账号的路径上。
   static const _uploadPathPrefix = 'vault.upload_path.';
 
@@ -80,6 +82,26 @@ class PrefsRepository {
     current.add(entry);
     await saveHidden(current);
   }
+
+  /// 离线下载任务：只存 App 侧这份记录（id 必须留，重启后靠它续查盒子进度）。
+  List<CacheTaskRecord> loadCacheTasks() {
+    final raw = _prefs.getString(_cacheTasksKey);
+    if (raw == null || raw.isEmpty) return const [];
+    try {
+      final list = jsonDecode(raw) as List<dynamic>;
+      return list
+          .map((e) => CacheTaskRecord.fromJson(Map<String, dynamic>.from(e as Map)))
+          .where((e) => e.id.isNotEmpty)
+          .toList();
+    } on Object {
+      return const [];
+    }
+  }
+
+  Future<void> saveCacheTasks(List<CacheTaskRecord> tasks) => _prefs.setString(
+        _cacheTasksKey,
+        jsonEncode(tasks.map((e) => e.toJson()).toList()),
+      );
 
   /// 连接页表单草稿：需求 §5「登录信息一直在」的载体——明文存 prefs，
   /// 只在用户点清空或成功登录（remember）时才增删；Keychain 里那份是另一回事。

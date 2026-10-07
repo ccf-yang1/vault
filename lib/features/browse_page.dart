@@ -14,6 +14,7 @@ import 'audio_player_page.dart';
 import 'doc_viewer_page.dart';
 import 'image_viewer_page.dart';
 import 'media_filter_page.dart';
+import 'offline_download.dart';
 import 'video_page.dart';
 
 /// HTML 02 / 03：浏览页。正常模式过滤隐藏目录，隐藏模式全部可见并给眼睛按钮。
@@ -89,6 +90,17 @@ class _BrowsePageState extends ConsumerState<BrowsePage> {
     await ref.read(hiddenDirsProvider.notifier).setHidden(entry, !hidden);
     if (!mounted) return;
     showVaultToast(context, hidden ? '已取消隐藏 ${entry.name}' : '已隐藏 ${entry.name}');
+  }
+
+  Future<void> _showActions(RemoteEntry entry, bool hiddenMode) {
+    final hidden = ref.read(hiddenDirsProvider.notifier).isHidden(entry.path);
+    return showEntryActionsSheet(
+      context,
+      entry,
+      hiddenMode: hiddenMode,
+      hidden: hidden,
+      onToggleHidden: () => _toggleHidden(entry),
+    );
   }
 
   List<RemoteEntry> _filtered(List<RemoteEntry> entries) {
@@ -299,7 +311,7 @@ class _BrowsePageState extends ConsumerState<BrowsePage> {
                             entry: entry,
                             hiddenMode: hiddenMode,
                             onTap: () => _open(entry),
-                            onLongPress: hiddenMode ? () => _toggleHidden(entry) : null,
+                            onLongPress: () => _showActions(entry, hiddenMode),
                             onToggleHidden: () => _toggleHidden(entry),
                           ),
                         );
