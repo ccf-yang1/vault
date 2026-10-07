@@ -141,28 +141,24 @@ class AppSettings {
     this.preloadEnabled = true,
     this.cacheLimitMB = 500,
     this.wifiOnlyUpload = false,
-    this.defaultUploadPath = '/',
     this.recentDays = 7,
   });
 
   final bool preloadEnabled;
   final int cacheLimitMB;
   final bool wifiOnlyUpload;
-  final String defaultUploadPath;
   final int recentDays;
 
   AppSettings copyWith({
     bool? preloadEnabled,
     int? cacheLimitMB,
     bool? wifiOnlyUpload,
-    String? defaultUploadPath,
     int? recentDays,
   }) =>
       AppSettings(
         preloadEnabled: preloadEnabled ?? this.preloadEnabled,
         cacheLimitMB: cacheLimitMB ?? this.cacheLimitMB,
         wifiOnlyUpload: wifiOnlyUpload ?? this.wifiOnlyUpload,
-        defaultUploadPath: defaultUploadPath ?? this.defaultUploadPath,
         recentDays: recentDays ?? this.recentDays,
       );
 }

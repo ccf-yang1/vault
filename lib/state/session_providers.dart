@@ -294,7 +294,6 @@ class SettingsController extends Notifier<AppSettings> {
   void setWifiOnly(bool value) => _write(state.copyWith(wifiOnlyUpload: value));
   void setCacheLimit(int mb) => _write(state.copyWith(cacheLimitMB: mb));
   void setRecentDays(int days) => _write(state.copyWith(recentDays: days.clamp(1, 30)));
-  void setUploadPath(String path) => _write(state.copyWith(defaultUploadPath: RemotePath.normalize(path)));
 }
 
 final settingsProvider = NotifierProvider<SettingsController, AppSettings>(SettingsController.new);
@@ -328,6 +327,47 @@ class HiddenDirsController extends Notifier<List<HiddenEntry>> {
 final hiddenDirsProvider = NotifierProvider<HiddenDirsController, List<HiddenEntry>>(HiddenDirsController.new);
 
 final hiddenModeProvider = StateProvider<bool>((ref) => false);
+
+/// 上传目标目录：按账号各记各的，切 A→B 自动换成 B 自己存过的路径；
+/// 非隐藏模式下若路径正好落在某个隐藏目录（含其子目录）里，退回最近的可见上级——
+/// 被隐藏的目录不该成为一个看得见、传得进的上传去处。
+class UploadDirController extends Notifier<String> {
+  @override
+  String build() {
+    final account = ref.watch(connectionConfigProvider);
+    if (account == null) return '/';
+    final saved = ref.read(prefsProvider).loadUploadPath(CredentialStore.idOf(account));
+    // watch 而非 read：在别处藏 / 取消藏、切隐藏模式时，上传目标要即时跟着净化。
+    final showHidden = ref.watch(hiddenModeProvider);
+    final hidden = ref.watch(hiddenDirsProvider).map((e) => RemotePath.normalize(e.path)).toSet();
+    return _sanitize(saved, showHidden, hidden);
+  }
+
+  void set(String path) {
+    final account = ref.read(connectionConfigProvider);
+    if (account == null) return;
+    ref.read(prefsProvider).saveUploadPath(CredentialStore.idOf(account), path);
+    state = _sanitize(path, ref.read(hiddenModeProvider), _hiddenPaths());
+  }
+
+  Set<String> _hiddenPaths() =>
+      ref.read(hiddenDirsProvider).map((e) => RemotePath.normalize(e.path)).toSet();
+
+  static String _sanitize(String dir, bool showHidden, Set<String> hidden) {
+    final normalized = RemotePath.normalize(dir);
+    if (showHidden) return normalized;
+    var path = '';
+    var lastSafe = '/';
+    for (final seg in normalized.split('/').where((s) => s.isNotEmpty)) {
+      path = '$path/$seg';
+      if (hidden.contains(path)) return lastSafe;
+      lastSafe = path;
+    }
+    return normalized;
+  }
+}
+
+final uploadDirProvider = NotifierProvider<UploadDirController, String>(UploadDirController.new);
 
 /// 隐藏口令：输入当前 HHmm 才进隐藏模式（需求 §4.1）。
 ///

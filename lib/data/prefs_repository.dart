@@ -13,6 +13,8 @@ class PrefsRepository {
   static const _settingsKey = 'vault.settings';
   static const _hiddenKey = 'vault.hidden_dirs';
   static const _draftKey = 'vault.draft';
+  /// 上传目标目录按账号各存各的：切账号时上传页才不会停在另一个账号的路径上。
+  static const _uploadPathPrefix = 'vault.upload_path.';
 
   final SharedPreferences _prefs;
 
@@ -27,7 +29,6 @@ class PrefsRepository {
         preloadEnabled: (json['preloadEnabled'] as bool?) ?? true,
         cacheLimitMB: (json['cacheLimitMB'] as num?)?.toInt() ?? 500,
         wifiOnlyUpload: (json['wifiOnlyUpload'] as bool?) ?? false,
-        defaultUploadPath: RemotePath.normalize((json['defaultUploadPath'] as String?) ?? '/'),
         recentDays: ((json['recentDays'] as num?)?.toInt() ?? 7).clamp(1, 30),
       );
     } on Object {
@@ -39,9 +40,14 @@ class PrefsRepository {
         'preloadEnabled': settings.preloadEnabled,
         'cacheLimitMB': settings.cacheLimitMB,
         'wifiOnlyUpload': settings.wifiOnlyUpload,
-        'defaultUploadPath': RemotePath.normalize(settings.defaultUploadPath),
         'recentDays': settings.recentDays,
       }));
+
+  String loadUploadPath(String accountId) =>
+      RemotePath.normalize(_prefs.getString('$_uploadPathPrefix$accountId') ?? '/');
+
+  Future<void> saveUploadPath(String accountId, String path) =>
+      _prefs.setString('$_uploadPathPrefix$accountId', RemotePath.normalize(path));
 
   List<HiddenEntry> loadHidden() {
     final raw = _prefs.getString(_hiddenKey);

@@ -22,9 +22,6 @@ class UploadPage extends ConsumerStatefulWidget {
 }
 
 class _UploadPageState extends ConsumerState<UploadPage> {
-  String _directory = '/';
-  bool _directoryLoaded = false;
-
   @override
   void initState() {
     super.initState();
@@ -35,11 +32,10 @@ class _UploadPageState extends ConsumerState<UploadPage> {
 
   Future<void> _pickDirectory() async {
     final picked = await Navigator.of(context).push<String>(
-      MaterialPageRoute(builder: (_) => DirPickerPage(initial: _directory)),
+      MaterialPageRoute(builder: (_) => DirPickerPage(initial: ref.read(uploadDirProvider))),
     );
     if (picked == null) return;
-    setState(() => _directory = picked);
-    ref.read(settingsProvider.notifier).setUploadPath(picked);
+    ref.read(uploadDirProvider.notifier).set(picked);
   }
 
   Future<void> _customDays() async {
@@ -84,11 +80,8 @@ class _UploadPageState extends ConsumerState<UploadPage> {
   Widget build(BuildContext context) {
     final state = ref.watch(uploadProvider);
     final controller = ref.read(uploadProvider.notifier);
-    final settings = ref.watch(settingsProvider);
-    if (!_directoryLoaded) {
-      _directory = settings.defaultUploadPath;
-      _directoryLoaded = true;
-    }
+    // 目录随当前账号 + 隐藏态走：切账号、藏/取消藏都会在下次 build 反映出来。
+    final directory = ref.watch(uploadDirProvider);
 
     return VaultAnnotatedRegion(
       child: Scaffold(
@@ -98,7 +91,7 @@ class _UploadPageState extends ConsumerState<UploadPage> {
           child: Column(
             children: [
               const VaultAppBar(title: '上传'),
-              _destCard(),
+              _destCard(directory),
               _chips(state),
               Expanded(child: _assets(state, controller)),
               if (state.uploading || state.tasks.isNotEmpty) _queue(state, controller),
@@ -110,7 +103,7 @@ class _UploadPageState extends ConsumerState<UploadPage> {
     );
   }
 
-  Widget _destCard() {
+  Widget _destCard(String directory) {
     return GestureDetector(
       behavior: HitTestBehavior.opaque,
       onTap: _pickDirectory,
@@ -129,7 +122,7 @@ class _UploadPageState extends ConsumerState<UploadPage> {
             const SizedBox(width: 9),
             Expanded(
               child: Text(
-                _directory,
+                directory,
                 overflow: TextOverflow.ellipsis,
                 style: const TextStyle(
                   fontSize: 12,
@@ -406,7 +399,7 @@ class _UploadPageState extends ConsumerState<UploadPage> {
                 loading: state.uploading,
                 onPressed: state.uploading || state.selected.isEmpty
                     ? null
-                    : () => controller.startUpload(_directory),
+                    : () => controller.startUpload(ref.read(uploadDirProvider)),
               ),
             ],
           ),
