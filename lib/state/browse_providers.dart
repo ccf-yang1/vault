@@ -65,6 +65,55 @@ final dirImagesProvider = Provider.family.autoDispose<List<RemoteEntry>, String>
   return ref.watch(dirEntriesProvider(path)).where((e) => e.kind == FileKind.image).toList();
 });
 
+/// 某个目录里「当前可见」的音频，供音频播放页当队列。
+final dirAudiosProvider = Provider.family.autoDispose<List<RemoteEntry>, String>((ref, path) {
+  return ref.watch(dirEntriesProvider(path)).where((e) => e.kind == FileKind.audio).toList();
+});
+
+final mediaScanGateProvider = Provider<Semaphore>((_) => Semaphore(6));
+
+/// 分类过滤用：递归扫描 root 子树，收集指定类型的文件并平铺（忽略目录层级）。
+/// 范围限定「当前所在目录子树」；带并发闸与上限，超大库先截断，单个子目录读失败就跳过，不打断整棵树。
+final mediaScanProvider =
+    FutureProvider.family.autoDispose<List<RemoteEntry>, ({String root, FileKind kind})>((ref, key) async {
+  final client = ref.read(davProvider);
+  final hidden = ref.watch(hiddenDirsProvider).map((e) => RemotePath.normalize(e.path)).toSet();
+  final showHidden = ref.watch(hiddenModeProvider);
+  final gate = ref.read(mediaScanGateProvider);
+
+  const maxFiles = 3000;
+  const maxDirs = 1200;
+
+  final out = <RemoteEntry>[];
+  final queue = <String>[RemotePath.normalize(key.root)];
+  final visited = <String>{};
+  var dirCount = 0;
+
+  while (queue.isNotEmpty && out.length < maxFiles && dirCount < maxDirs) {
+    final dir = queue.removeAt(0);
+    if (visited.contains(dir)) continue;
+    visited.add(dir);
+    dirCount++;
+    List<RemoteEntry> children;
+    try {
+      children = await gate.run(() => client.list(dir));
+    } on Object {
+      continue;
+    }
+    for (final child in children) {
+      if (!showHidden && hidden.contains(RemotePath.normalize(child.path))) continue;
+      if (child.isDir) {
+        queue.add(child.path);
+      } else if (child.kind == key.kind) {
+        out.add(child);
+        if (out.length >= maxFiles) break;
+      }
+    }
+  }
+  out.sort((a, b) => a.path.compareTo(b.path));
+  return out;
+});
+
 class FolderStat {
   const FolderStat(this.count, this.bytes);
 

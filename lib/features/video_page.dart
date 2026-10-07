@@ -149,31 +149,6 @@ class _VideoPageState extends ConsumerState<VideoPage> {
     });
   }
 
-  void _onHorizontalDrag(double delta) {
-    final controller = _controller;
-    if (controller == null) return;
-    final total = controller.value.duration;
-    if (total == Duration.zero) return;
-    // 横扫一整屏 ≈ 快进 60 秒。
-    final step = (delta / 320) * 10;
-    var next = (_scrubbing ? _dragTarget : controller.value.position) + Duration(seconds: step.round());
-    if (next < Duration.zero) next = Duration.zero;
-    if (next > total) next = total;
-    setState(() {
-      _scrubbing = true;
-      _dragTarget = next;
-      _controlsVisible = true;
-    });
-  }
-
-  void _endDrag() {
-    final controller = _controller;
-    if (controller == null || !_scrubbing) return;
-    controller.seekTo(_dragTarget);
-    setState(() => _scrubbing = false);
-    _scheduleHide();
-  }
-
   @override
   Widget build(BuildContext context) {
     final controller = _controller;
@@ -258,8 +233,6 @@ class _VideoPageState extends ConsumerState<VideoPage> {
         _controlsVisible = !_controlsVisible;
         if (_controlsVisible) _scheduleHide();
       }),
-      onHorizontalDragUpdate: (details) => _onHorizontalDrag(details.delta.dx),
-      onHorizontalDragEnd: (_) => _endDrag(),
       child: Stack(
         alignment: Alignment.center,
         children: [
@@ -318,17 +291,20 @@ class _VideoPageState extends ConsumerState<VideoPage> {
               Expanded(
                 child: SliderTheme(
                   data: SliderThemeData(
-                    trackHeight: 3,
+                    trackHeight: 4,
                     activeTrackColor: VaultColors.accent,
                     inactiveTrackColor: VaultColors.surface2,
                     thumbColor: VaultColors.accent,
-                    overlayShape: const RoundSliderOverlayShape(overlayRadius: 14),
-                    thumbShape: const RoundSliderThumbShape(enabledThumbRadius: 6),
+                    overlayColor: VaultColors.accent.withValues(alpha: 0.14),
+                    overlayShape: const RoundSliderOverlayShape(overlayRadius: 18),
+                    thumbShape: const RoundSliderThumbShape(enabledThumbRadius: 7),
                   ),
                   child: Slider(
                     value: progress,
                     onChanged: (value) {
                       if (total == Duration.zero) return;
+                      // 拖动过程中别自动收起控制栏。
+                      _hideTimer?.cancel();
                       setState(() {
                         _scrubbing = true;
                         _dragTarget = total * value;
@@ -363,7 +339,7 @@ class _VideoPageState extends ConsumerState<VideoPage> {
           ),
           const SizedBox(height: 2),
           const Text(
-            '左右拖动屏幕可快进 / 快退',
+            '拖动进度条可快进 / 快退',
             style: TextStyle(fontSize: 10.5, color: VaultColors.dim),
           ),
         ],

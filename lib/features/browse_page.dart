@@ -10,7 +10,9 @@ import '../data/webdav_client.dart';
 import '../state/browse_providers.dart';
 import '../state/session_providers.dart';
 import 'archive_page.dart';
+import 'audio_player_page.dart';
 import 'image_viewer_page.dart';
+import 'media_filter_page.dart';
 import 'video_page.dart';
 
 /// HTML 02 / 03：浏览页。正常模式过滤隐藏目录，隐藏模式全部可见并给眼睛按钮。
@@ -62,6 +64,12 @@ class _BrowsePageState extends ConsumerState<BrowsePage> {
         );
       case FileKind.video:
         Navigator.of(context).push(MaterialPageRoute(builder: (_) => VideoPage(entry: entry)));
+      case FileKind.audio:
+        final audios = ref.read(dirAudiosProvider(_path));
+        final index = audios.indexWhere((e) => e.path == entry.path);
+        Navigator.of(context).push(
+          MaterialPageRoute(builder: (_) => AudioPlayerPage(playlist: audios, initialIndex: index < 0 ? 0 : index)),
+        );
       case FileKind.archive:
         if (!entry.isZip) {
           showVaultToast(context, 'v1 只支持 ZIP，RAR / 7z 暂未实现', error: true);
@@ -151,6 +159,67 @@ class _BrowsePageState extends ConsumerState<BrowsePage> {
     );
   }
 
+  /// 顶部搜索框：按名称过滤当前目录已可见条目（本地，不重新发 PROPFIND）。
+  Widget _searchBar() {
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(14, 0, 14, 8),
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 12),
+        decoration: BoxDecoration(
+          color: VaultColors.field,
+          borderRadius: BorderRadius.circular(VaultRadius.field),
+          border: Border.all(color: VaultColors.line2),
+        ),
+        child: Row(
+          children: [
+            const VIcon('search', size: 16, color: VaultColors.dim),
+            const SizedBox(width: 8),
+            Expanded(
+              child: TextField(
+                controller: _search,
+                autofocus: true,
+                style: const TextStyle(fontSize: 13.5, color: VaultColors.text),
+                decoration: const InputDecoration(
+                  isDense: true,
+                  border: InputBorder.none,
+                  hintText: '按名称搜索当前目录',
+                  hintStyle: TextStyle(fontSize: 13.5, color: VaultColors.dim),
+                ),
+                onChanged: (_) => setState(() {}),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  /// 三点分类过滤：图片 / 视频 / 音频。进入独立页，递归当前目录子树后平铺展示。
+  void _showFilterMenu() {
+    final width = MediaQuery.of(context).size.width;
+    final top = MediaQuery.of(context).padding.top + 52;
+    showMenu<String>(
+      context: context,
+      position: RelativeRect.fromLTRB(width - 132, top, 12, 0),
+      color: VaultColors.surface,
+      items: const [
+        PopupMenuItem(value: 'image', child: _FilterMenuItem(icon: 'image', label: '图片', color: VaultColors.green)),
+        PopupMenuItem(value: 'video', child: _FilterMenuItem(icon: 'video', label: '视频', color: VaultColors.purple)),
+        PopupMenuItem(value: 'audio', child: _FilterMenuItem(icon: 'audio', label: '音频', color: VaultColors.accentText)),
+      ],
+    ).then((value) {
+      if (value == null || !mounted) return;
+      final kind = switch (value) {
+        'image' => FileKind.image,
+        'video' => FileKind.video,
+        _ => FileKind.audio,
+      };
+      Navigator.of(context).push(
+        MaterialPageRoute(builder: (_) => MediaFilterPage(root: _path, kind: kind)),
+      );
+    });
+  }
+
   @override
   Widget build(BuildContext context) {
     final hiddenMode = ref.watch(hiddenModeProvider);
@@ -183,10 +252,12 @@ class _BrowsePageState extends ConsumerState<BrowsePage> {
                     if (!_searching) _search.clear();
                   }),
                 ),
+                IconBtn(icon: 'more', color: VaultColors.muted, onTap: _showFilterMenu),
                 if (widget.onOpenSettings != null) IconBtn(icon: 'gear', onTap: widget.onOpenSettings),
               ],
             ),
             _breadcrumb(hiddenMode, preload),
+            if (_searching) _searchBar(),
             Expanded(
               child: list.when(
                 loading: () => const Center(
@@ -410,6 +481,7 @@ class _EntryRow extends ConsumerWidget {
       FileKind.folder => 'folder',
       FileKind.image => 'image',
       FileKind.video => 'video',
+      FileKind.audio => 'audio',
       FileKind.archive => 'zip',
       FileKind.other => 'list',
     };
@@ -421,6 +493,7 @@ class _EntryRow extends ConsumerWidget {
       FileKind.folder => VaultColors.blue,
       FileKind.image => VaultColors.green,
       FileKind.video => VaultColors.purple,
+      FileKind.audio => VaultColors.accentText,
       FileKind.archive => VaultColors.orange,
       FileKind.other => VaultColors.muted,
     };
@@ -443,5 +516,25 @@ class _EntryRow extends ConsumerWidget {
     final size = entry.size > 0 ? formatBytes(entry.size) : '—';
     if (entry.kind == FileKind.archive && entry.isZip) return '$size · 按需解压后可浏览';
     return time.isEmpty ? size : '$size · $time';
+  }
+}
+
+/// 三点菜单里的一行：小图标 + 文字。
+class _FilterMenuItem extends StatelessWidget {
+  const _FilterMenuItem({required this.icon, required this.label, required this.color});
+
+  final String icon;
+  final String label;
+  final Color color;
+
+  @override
+  Widget build(BuildContext context) {
+    return Row(
+      children: [
+        VIcon(icon, size: 17, color: color),
+        const SizedBox(width: 10),
+        Text(label, style: const TextStyle(fontSize: 13.5, color: VaultColors.text)),
+      ],
+    );
   }
 }

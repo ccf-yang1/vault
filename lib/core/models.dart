@@ -12,7 +12,7 @@ enum StorageType {
       values.firstWhere((t) => t.name == name, orElse: () => webdav);
 }
 
-enum FileKind { folder, image, video, archive, other }
+enum FileKind { folder, image, video, audio, archive, other }
 
 class ConnectionConfig {
   const ConnectionConfig({
@@ -99,9 +99,19 @@ class RemoteEntry {
     final ext = extension.toLowerCase();
     if (_imageExts.contains(ext)) return FileKind.image;
     if (_videoExts.contains(ext)) return FileKind.video;
+    if (_audioExts.contains(ext)) return FileKind.audio;
     if (_archiveExts.contains(ext)) return FileKind.archive;
     return FileKind.other;
   }
+
+  /// iOS 原生解码器放不了的音频容器：打开音频页就直接提示，不初始化播放器。
+  bool get isIosUnsupportedAudio {
+    if (kind != FileKind.audio) return false;
+    return const {'.wma', '.asf', '.ra', '.rm', '.aiff', '.aif'}.contains(extension);
+  }
+
+  /// just_audio（AVFoundation）在 iOS 上可播的常见格式。
+  bool get isNativePlayableAudio => kind == FileKind.audio && !isIosUnsupportedAudio;
 
   String get extension {
     final dot = name.lastIndexOf('.');
@@ -110,6 +120,7 @@ class RemoteEntry {
 
   static const _imageExts = {'.jpg', '.jpeg', '.png', '.gif', '.webp', '.heic', '.heif', '.bmp', '.tiff', '.tif', '.avif'};
   static const _videoExts = {'.mp4', '.mov', '.m4v', '.mkv', '.webm', '.avi', '.flv', '.wmv', '.ts', '.3gp'};
+  static const _audioExts = {'.mp3', '.m4a', '.aac', '.wav', '.flac', '.ogg', '.oga', '.opus', '.wma', '.asf', '.aiff', '.aif', '.mka'};
   static const _archiveExts = {'.zip', '.rar', '.7z', '.tar', '.gz', '.tgz'};
 
   bool get isZip => extension == '.zip';
