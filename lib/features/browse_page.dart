@@ -36,6 +36,10 @@ class _BrowsePageState extends ConsumerState<BrowsePage> {
   bool _searching = false;
   final _search = TextEditingController();
 
+  // 已删项先本地过滤掉，保证 Dismissible 在服务器刷新回来之前能干净移除，
+  // 不会触发「已 dismiss 却还在树上」断言。
+  final _dismissed = <String>{};
+
   @override
   void dispose() {
     _search.dispose();
@@ -87,12 +91,74 @@ class _BrowsePageState extends ConsumerState<BrowsePage> {
     await ref.read(dirRawProvider(_path).future);
   }
 
+  /// 左滑删除：先二次确认（远端永久删除，不可恢复），确认后才发 DELETE。
+  /// 返回 true 才让 Dismissible 收起；失败弹提示并返回 false，行自动弹回。
+  Future<bool> _confirmAndDelete(RemoteEntry entry) async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        backgroundColor: VaultColors.surface,
+        title: Text(
+          entry.isDir ? '删除整个目录？' : '删除这个文件？',
+          style: const TextStyle(fontSize: 16, color: VaultColors.text),
+        ),
+        content: Text(
+          '「${entry.name}」${entry.isDir ? ' 及其内部所有内容' : ''}将从服务器上永久删除，无法恢复。',
+          style: const TextStyle(fontSize: 13, color: VaultColors.muted, height: 1.5),
+        ),
+        actions: [
+          TextButton(onPressed: () => Navigator.of(ctx).pop(false), child: const Text('取消')),
+          TextButton(
+            onPressed: () => Navigator.of(ctx).pop(true),
+            child: const Text('删除', style: TextStyle(color: Color(0xFFE0736A))),
+          ),
+        ],
+      ),
+    );
+    if (confirmed != true) return false;
+    try {
+      await ref.read(davProvider).delete(entry.path);
+    } on WebDavError catch (e) {
+      if (mounted) showVaultToast(context, e.message, error: true);
+      return false;
+    } on Object catch (e) {
+      if (mounted) showVaultToast(context, '删除失败：$e', error: true);
+      return false;
+    }
+    if (!mounted) return false;
+    setState(() => _dismissed.add(entry.path));
+    showVaultToast(context, '已删除 ${entry.name}');
+    return true;
+  }
+
+  Widget _deleteSlate(RemoteEntry entry) {
+    final label = entry.isDir ? '删除目录' : '删除';
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 18),
+      alignment: Alignment.centerRight,
+      decoration: const BoxDecoration(
+        borderRadius: BorderRadius.all(Radius.circular(12)),
+        color: Color(0xFF3A2325),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          const VIcon('trash', size: 18, color: Color(0xFFE0736A)),
+          const SizedBox(width: 6),
+          Text(label, style: const TextStyle(fontSize: 12.5, color: Color(0xFFE0736A))),
+        ],
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final hiddenMode = ref.watch(hiddenModeProvider);
     final preload = ref.watch(settingsProvider).preloadEnabled;
     final list = ref.watch(dirRawProvider(_path));
-    final visible = _filtered(ref.watch(dirEntriesProvider(_path)));
+    final visible = _filtered(ref.watch(dirEntriesProvider(_path)))
+        .where((e) => !_dismissed.contains(e.path))
+        .toList();
 
     return VaultAnnotatedRegion(
       child: Scaffold(
@@ -149,12 +215,19 @@ class _BrowsePageState extends ConsumerState<BrowsePage> {
                       itemCount: visible.length,
                       itemBuilder: (context, index) {
                         final entry = visible[index];
-                        return _EntryRow(
-                          entry: entry,
-                          hiddenMode: hiddenMode,
-                          onTap: () => _open(entry),
-                          onLongPress: hiddenMode ? () => _toggleHidden(entry) : null,
-                          onToggleHidden: () => _toggleHidden(entry),
+                        return Dismissible(
+                          key: ValueKey('swipe-${entry.path}'),
+                          direction: DismissDirection.endToStart,
+                          confirmDismiss: (_) => _confirmAndDelete(entry),
+                          onDismissed: (_) => _refresh(),
+                          background: _deleteSlate(entry),
+                          child: _EntryRow(
+                            entry: entry,
+                            hiddenMode: hiddenMode,
+                            onTap: () => _open(entry),
+                            onLongPress: hiddenMode ? () => _toggleHidden(entry) : null,
+                            onToggleHidden: () => _toggleHidden(entry),
+                          ),
                         );
                       },
                     ),

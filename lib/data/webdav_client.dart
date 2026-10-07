@@ -451,6 +451,27 @@ class WebDavClient {
     }
   }
 
+  /// 左滑删除用：WebDAV DELETE 单个文件或整个目录。
+  /// 撞到 403 按「没开 WebDAV 写入」报，跟 PUT / MKCOL 同源（OpenList 用一个写权限位管三样）。
+  Future<void> delete(String path) async {
+    try {
+      final res = await _dio.request<dynamic>(
+        urlFor(RemotePath.normalize(path)).toString(),
+        options: _options(
+          method: 'DELETE',
+          receiveTimeout: const Duration(seconds: 20),
+          validateStatus: (status) => status != null && status < 500,
+        ),
+      );
+      final code = res.statusCode ?? 0;
+      // 204 无内容是最常见成功；部分服务器整目录删除回 200/202/207，都当成功。
+      if (code == 200 || code == 202 || code == 204 || code == 207) return;
+      throw WebDavError.forWrite(WebDavError.fromStatus(code, body: res.data));
+    } on DioException catch (e) {
+      throw WebDavError.forWrite(_err(e));
+    }
+  }
+
   /// 读取字节区间：ZIP 中央目录、按需解压都靠它。
   Future<Uint8List> readRange(String path, int start, int end) async {
     try {

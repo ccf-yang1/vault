@@ -108,11 +108,30 @@ class UploadController extends Notifier<UploadState> {
   static const _maxAssets = 1500;
 
   CancelToken? _token;
+  Timer? _finishTimer;
 
   @override
   UploadState build() {
-    ref.onDispose(() => _token?.cancel('页面销毁'));
+    ref.onDispose(() {
+      _token?.cancel('页面销毁');
+      _finishTimer?.cancel();
+      _finishTimer = null;
+    });
     return const UploadState();
+  }
+
+  /// 上传结束（全部完成 / 有失败 / 取消）后，结果条最多再停留 2s 自动收起。
+  void _scheduleFinishDismiss() {
+    _finishTimer?.cancel();
+    _finishTimer = Timer(const Duration(seconds: 2), dismissQueue);
+  }
+
+  /// 右上角叉叉与超时都走这里：立刻收起结果条 / 提示，恢复选择区。
+  void dismissQueue() {
+    _finishTimer?.cancel();
+    _finishTimer = null;
+    if (state.tasks.isEmpty && state.message == null) return;
+    state = state.copyWith(tasks: const [], message: null);
   }
 
   Future<void> requestPermissionAndLoad() async {
@@ -219,6 +238,7 @@ class UploadController extends Notifier<UploadState> {
       }
     }
     state = state.copyWith(tasks: List.of(tasks), uploading: false);
+    _scheduleFinishDismiss();
   }
 
   Future<void> startUpload(String directory) async {
@@ -244,6 +264,7 @@ class UploadController extends Notifier<UploadState> {
     final byId = {for (final asset in chosen) asset.id: asset};
     final token = CancelToken();
     _token = token;
+    _finishTimer?.cancel();
     state = state.copyWith(tasks: tasks, uploading: true, message: null);
 
     for (final task in tasks) {
@@ -315,6 +336,11 @@ class UploadController extends Notifier<UploadState> {
     _token = null;
     final finished = List.of(state.tasks);
     state = state.copyWith(tasks: finished, uploading: false);
+    // 全部传成功就顺手清空选择：chips 取消高亮、底部计数归零，否则像没反应。
+    // 取消导致的提前结束不清（用户可能想改完再传）；有失败项也留着，靠超时 / 叉叉收起。
+    final allDone = finished.isNotEmpty && finished.every((t) => t.status == UploadStatus.done);
+    if (allDone) unawaited(clearSelection());
+    _scheduleFinishDismiss();
   }
 
   /// 只重试失败项。

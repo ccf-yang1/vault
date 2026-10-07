@@ -298,11 +298,18 @@ class _UploadPageState extends ConsumerState<UploadPage> {
         children: [
           Row(
             children: [
-              Text(
-                '上传中 ${state.doneCount} / ${tasks.length}',
-                style: const TextStyle(fontSize: 12, color: VaultColors.text),
+              Expanded(
+                child: Text(
+                  state.uploading
+                      ? '上传中 ${state.doneCount} / ${tasks.length}'
+                      : state.failedCount > 0
+                          ? '已结束 · ${state.doneCount} 成功 · ${state.failedCount} 失败'
+                          : '上传完成 ${state.doneCount} / ${tasks.length}',
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: const TextStyle(fontSize: 12, color: VaultColors.text),
+                ),
               ),
-              const Spacer(),
               if (state.uploading)
                 GestureDetector(
                   behavior: HitTestBehavior.opaque,
@@ -315,6 +322,17 @@ class _UploadPageState extends ConsumerState<UploadPage> {
                   onTap: controller.retryFailed,
                   child: Text('重试 ${state.failedCount} 项', style: const TextStyle(fontSize: 12, color: VaultColors.accent)),
                 ),
+              if (!state.uploading) ...[
+                const SizedBox(width: 14),
+                GestureDetector(
+                  behavior: HitTestBehavior.opaque,
+                  onTap: controller.dismissQueue,
+                  child: const Padding(
+                    padding: EdgeInsets.symmetric(horizontal: 2, vertical: 1),
+                    child: VIcon('close', size: 15, color: VaultColors.dim),
+                  ),
+                ),
+              ],
             ],
           ),
           const SizedBox(height: 8),
